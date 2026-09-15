@@ -3,11 +3,22 @@
 `calibration.json` 是 1080×1920 的参考地面投影。历史样本覆盖两席位各 8 个静止加农炮落点，
 不是新设备的自动验收证据。相同比例缩放可复用参考，不同比例会拒绝；换竞技场界面仍需核对。
 
-1. 大号手动开好友战，AI 保持关闭，先保存一张自己的完整竞技场截图。
+1. 手动开一局对局（好友战最方便，可以事先约定两边用不同卡组），AI 保持关闭，
+   然后截取一张**完整竞技场**画面。截图必须用 ADB 取回，不要用系统截屏或窗口截图工具
+   （会带上边框或缩放，叠图就对不上了）：
+
+   ```powershell
+   $settings = Get-Content .\settings.local.json -Raw | ConvertFrom-Json
+   & $settings.adb_path -s $settings.adb_serial shell screencap -p /sdcard/arena.png
+   & $settings.adb_path -s $settings.adb_serial pull /sdcard/arena.png diagnostics\arena.png
+   ```
+
+   用 `shell screencap` 加 `pull`，不要用 `exec-out screencap -p > arena.png`：
+   PowerShell 的重定向按文本处理二进制，得到的 PNG 会损坏。
 2. 使用项目 Python 执行：
 
    ```powershell
-   .\.venv\Scripts\python.exe tools\coordinate_view.py --image 'C:\captures\battle.png' --output diagnostics\coordinates.html
+   .\.venv\Scripts\python.exe tools\coordinate_view.py --image diagnostics\arena.png --output diagnostics\coordinates.html
    ```
 
    用浏览器打开结果；查看左右两路、河边和后场的地面中心，切换 owner 后相同模型落点应仍在同一屏幕位置。

@@ -3,12 +3,15 @@
 本项目是在线游戏的感知—推理—触摸执行桥接层，**自包含部署端**：FirstLight 推理运行时与
 冻结数据在 `upstream/firstlight/`，权重在 `weights/`，默认 `settings` 无需再指向上游目录。
 通过 Root MuMu 读取 Null’s Royale 原生状态，使用 ADB 触摸执行动作。
+自包含指的是 Git 仓库：`tools/package_release.py` 产出的 ZIP 按设计不含权重与上游运行时，
+用该渠道分发时需按 `upstream.lock.json` 补齐两个目录，见 [docs/RELEASE.md](docs/RELEASE.md)。
 
 ## 按任务读取
 
 - 新电脑／模拟器配置、启动排错、首次对战验证：读取
   [.agents/skills/configure-royaleharness/SKILL.md](.agents/skills/configure-royaleharness/SKILL.md)。
 - 手动安装步骤：[docs/SETUP.md](docs/SETUP.md)。
+- 选择模型或说明权重来历：[docs/MODELS.md](docs/MODELS.md)。
 - 多局自动化（含天梯"再来一场"直连下一局）：`tools/multi_match.py --help`。
 - 修改观测或执行逻辑：先看 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 - 打包公开版本：[docs/RELEASE.md](docs/RELEASE.md)。
@@ -36,6 +39,9 @@
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -q
 ```
+
+测试必须用 `.venv` 的解释器（需要 torch）。用无关的系统解释器会因缺 torch 报出
+`'test_pipeline' module incorrectly imported`，与真实原因无关。
 
 区分只读检查、模型推理、实际输入与游戏确认。发送成功不能替代手牌／技能变化确认，
 终局前未确认的动作保留为未确认。源码测试通过、整局运行通过和策略强度是不同结论。
