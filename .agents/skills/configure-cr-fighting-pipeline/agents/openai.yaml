@@ -1,0 +1,4 @@
+interface:
+  display_name: "Configure CR fighting pipeline"
+  short_description: "Set up MuMu, local settings, and live AI validation"
+  default_prompt: "Use $configure-cr-fighting-pipeline to configure my MuMu instance and validate the CR_fighting_pipeline gameplay loop."

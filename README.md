@@ -32,9 +32,11 @@ decide, deploy cards by touch, confirm the result, and loop the matches.
 **它也不是通用的《皇室战争》脚本**：没有图像识别，只支持指纹匹配的 Null’s Royale，不接官方客户端，
 换版本需要重新适配。
 
-命名说明：仓库名是 `CR_fighting_pipeline`。仓库内的桥接与执行层沿用其来源工程名
-**RoyaleHarness**，所以部分文档和 agent 配置里还会看到这个名字；模型与观测契约一侧来自上游
-**FirstLight CR**。
+来源说明：桥接与执行层（原生探针、观测适配、坐标换算、ADB 触摸与结果确认）是本仓库自己的实现，
+重构自作者先前名为 **RoyaleHarness** 的工程；模型、观测与动作契约一侧来自上游
+[FirstLight CR](https://gitlab.com/firstlight3/FirstLight_CR)，`upstream/firstlight/` 与 `weights/`
+都是它的裁剪副本，逐文件来源与哈希见 [upstream.lock.json](upstream.lock.json) 与
+[上游说明](probe/FIRSTLIGHT_NOTICE.md)。
 
 ## 获取方式
 
@@ -58,7 +60,7 @@ decide, deploy cards by touch, confirm the result, and loop the matches.
 > 按配置技能发现环境、填写本地设置并验证运行；需要我进入对战时告诉我。
 
 [AGENTS.md](AGENTS.md) 是工作入口，
-[配置技能](.agents/skills/configure-royaleharness/SKILL.md) 说明如何识别实例、选择端口、
+[配置技能](.agents/skills/configure-cr-fighting-pipeline/SKILL.md) 说明如何识别实例、选择端口、
 填写路径与账号、校准并验证闭环。是否自动发现技能取决于助手；不能自动加载时，直接让它阅读这些文件即可。
 这些文件提供操作指引，不会自行执行配置。
 
@@ -219,8 +221,8 @@ FirstLight 推理运行时、冻结目录数据与模型权重已随本仓库分
 
 模型架构、权重、观测／动作合约和多项探针布局来自
 [FirstLight CR](https://gitlab.com/firstlight3/FirstLight_CR)。
-本仓库在此基础上提供面向当前在线测试环境的桥接与运行适配，
-也就是仓库内的 RoyaleHarness 层；本发行版没有修改上游权重。
+`CR_fighting_pipeline` 在此基础上提供面向当前在线测试环境的桥接与运行适配；
+本发行版没有修改上游权重。
 
 本项目采用 **Apache-2.0**，见 [LICENSE](LICENSE)、[NOTICE](NOTICE) 和
 [上游来源说明](probe/FIRSTLIGHT_NOTICE.md)。随仓库分发的 `weights/` 为上游发布权重，

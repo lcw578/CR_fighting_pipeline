@@ -1,13 +1,14 @@
 ---
-name: configure-royaleharness
-description: Configure and validate RoyaleHarness on a Windows PC and a Root MuMu instance running the supported Null's Royale build. Use for onboarding another emulator or account, filling local settings, or diagnosing startup and reconnect behavior. This is live gameplay setup, not offline-engine installation or model training.
+name: configure-cr-fighting-pipeline
+description: Configure and validate CR_fighting_pipeline on a Windows PC and a Root MuMu instance running the supported Null's Royale build. Use for onboarding another emulator or account, filling local settings, or diagnosing startup and reconnect behavior. This is live gameplay setup, not offline-engine installation or model training.
 ---
 
-# 配置 RoyaleHarness
+# 配置 CR_fighting_pipeline
 
 目标是让指定实例完成状态读取、模型推理和已获授权的触摸执行，配置保留在使用者本地。
-仓库根目录是同时包含 `config.py`、`setup.ps1`、`upstream.lock.json` 的目录；
-所有命令在该目录运行，不依赖历史开发路径。**上游运行时、冻结数据与权重已随仓库分发**
+仓库根目录是同时包含 `config.py`、`setup.ps1`、`upstream.lock.json` 的目录，
+也就是本仓库 `CR_fighting_pipeline` 的根；所有命令在该目录运行，不依赖历史开发路径。
+**上游运行时、冻结数据与权重已随仓库分发**
 （`upstream/firstlight/`、`weights/`），新机器无需单独获取上游。安装步骤见
 [docs/SETUP.md](../../../docs/SETUP.md)，按需查阅，不复制另一套安装逻辑。
 
