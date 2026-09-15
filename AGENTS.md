@@ -1,6 +1,7 @@
-# RoyaleHarness：agent 工作说明
+# CR_fighting_pipeline：agent 工作说明
 
-本项目是在线游戏的感知—推理—触摸执行桥接层，**自包含部署端**：FirstLight 推理运行时与
+本仓库是在线游戏的感知—推理—触摸执行桥接层（桥接与执行层沿用来源工程名 RoyaleHarness），
+**自包含部署端**：FirstLight 推理运行时与
 冻结数据在 `upstream/firstlight/`，权重在 `weights/`，默认 `settings` 无需再指向上游目录。
 通过 Root MuMu 读取 Null’s Royale 原生状态，使用 ADB 触摸执行动作。
 自包含指的是 Git 仓库：`tools/package_release.py` 产出的 ZIP 按设计不含权重与上游运行时，

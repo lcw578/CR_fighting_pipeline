@@ -1,17 +1,40 @@
-# RoyaleHarness
+# CR_fighting_pipeline
 
-**面向《皇室战争》的感知、推理与自动操控框架。**
+**在 Windows 上让 FirstLight 的《皇室战争》模型真实打在线对战。**
 
-A perception–inference–action harness for Clash Royale.
+Deploy FirstLight CR models onto a Root MuMu running Null’s Royale: read native state,
+decide, deploy cards by touch, confirm the result, and loop the matches.
 
-RoyaleHarness 把 FirstLight 的 V4 策略模型接到 MuMu 中运行的 Null’s Royale 上，
-完成 **读取实时战况 → 模型决策 → 触摸下牌 → 执行结果确认** 的闭环。
-项目重点是让已有模型实际运行在游戏里，包括观测适配、决策调度、坐标转换和动作执行。
+当前版本：**`v0.1.0-preview`**。状态与已知边界见[验证记录](docs/VALIDATION.md)。
+感知来自原生数据，视觉感知是后续方向；接入目标是 Null’s Royale，未适配官方客户端。
 
-当前版本：**`v0.1.0-preview`**。
-目前使用原生数据感知；视觉感知是后续方向。当前接入目标为 Null’s Royale，未适配官方客户端。
+[这个仓库做什么](#这个仓库做什么) · [获取方式](#获取方式) · [开始使用](#开始使用) · [模型与权重](docs/MODELS.md) · [配置指南](docs/SETUP.md) · [架构说明](docs/ARCHITECTURE.md)
 
-[让 agent 协助配置](#让-agent-协助配置) · [开始使用](#开始使用) · [模型与权重](docs/MODELS.md) · [配置指南](docs/SETUP.md) · [架构说明](docs/ARCHITECTURE.md)
+## 这个仓库做什么
+
+一句话：**把已经训练好的 FirstLight 模型接到真实联机对局里，让它自己读战况、自己下牌，
+并把一局接一局地跑下去。**
+
+模型要跑起来，中间有三个必须打通的环节，缺一个都动不了：
+
+1. **读状态**——游戏跑在 MuMu 里，模型要的却是 FirstLight 的 V4 观测格式。
+   仓库用一个原生代理探针从游戏进程里只读采集实时状态，再转换成模型能吃的观测。
+2. **做决策**——复用 FirstLight 已发布的 V4 权重，保留它的 LSTM 状态、上一动作历史和每 5 tick 的决策窗口。
+3. **执行并确认**——把决策换算成屏幕坐标，通过 ADB 触摸选牌、下牌，
+   再用**游戏自身状态的变化**（手牌变少、圣水下降、技能充能清零）确认动作真的生效。
+   发送成功不算成功。
+
+在这之上，`tools/multi_match.py` 把单局串成多局：结算页用天梯"再来一场"直接衔接下一局，
+循环不需要人工点击。你自己的流水线可以继续在它之上编排。
+
+**它是部署端，不是训练端。** 模型架构、权重、观测与动作契约都来自上游 FirstLight CR；
+本仓库不改权重、不训练、不微调，也不能重新导出权重。
+**它也不是通用的《皇室战争》脚本**：没有图像识别，只支持指纹匹配的 Null’s Royale，不接官方客户端，
+换版本需要重新适配。
+
+命名说明：仓库名是 `CR_fighting_pipeline`。仓库内的桥接与执行层沿用其来源工程名
+**RoyaleHarness**，所以部分文档和 agent 配置里还会看到这个名字；模型与观测契约一侧来自上游
+**FirstLight CR**。
 
 ## 获取方式
 
@@ -31,7 +54,7 @@ RoyaleHarness 把 FirstLight 的 V4 策略模型接到 MuMu 中运行的 Null’
 
 在支持仓库指令的编程助手中打开项目，可以这样提出任务：
 
-> 请阅读 AGENTS.md，帮我把 RoyaleHarness 配置到我指定的 MuMu 实例。
+> 请阅读 AGENTS.md，帮我把这个项目配置到我指定的 MuMu 实例。
 > 按配置技能发现环境、填写本地设置并验证运行；需要我进入对战时告诉我。
 
 [AGENTS.md](AGENTS.md) 是工作入口，
@@ -196,7 +219,8 @@ FirstLight 推理运行时、冻结目录数据与模型权重已随本仓库分
 
 模型架构、权重、观测／动作合约和多项探针布局来自
 [FirstLight CR](https://gitlab.com/firstlight3/FirstLight_CR)。
-RoyaleHarness 在此基础上提供面向当前在线测试环境的桥接与运行适配；本发行版没有修改上游权重。
+本仓库在此基础上提供面向当前在线测试环境的桥接与运行适配，
+也就是仓库内的 RoyaleHarness 层；本发行版没有修改上游权重。
 
 本项目采用 **Apache-2.0**，见 [LICENSE](LICENSE)、[NOTICE](NOTICE) 和
 [上游来源说明](probe/FIRSTLIGHT_NOTICE.md)。随仓库分发的 `weights/` 为上游发布权重，
