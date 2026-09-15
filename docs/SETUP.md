@@ -6,23 +6,57 @@
 若使用 `tools/package_release.py` 产出的 ZIP，先按 [upstream.lock.json](../upstream.lock.json)
 补齐这两个目录，其余步骤相同；两种渠道的差别见[发布说明](RELEASE.md)。
 
-支持的游戏库 `libg.so` SHA-256：
-`110aa2b5cac391c498645e072b0d88729428c2c2845e7e2737ca8ee979059783`。
-同一版本号不保证原生库与内容一致，安装器会校验指纹。
+## 支持的游戏构建
+
+必须使用**指纹匹配**的那个 Null’s Royale 构建，版本对不上安装器会直接停止：
+
+| 项 | 值 |
+| --- | --- |
+| 包名 | `nullsroyale.rel.free` |
+| 版本 | **15.535.13**（versionCode `150535013`） |
+| ABI | `arm64-v8a` |
+| `libg.so` SHA-256 | `110aa2b5cac391c498645e072b0d88729428c2c2845e7e2737ca8ee979059783` |
+| APK SHA-256 | `685c115ee432d5fd2d7be856a58ea0cb029c9c187aa9061f3cd250994dfbcf2a` |
+| 资源内容版本 | `15.535.86` |
+
+机器可读的同内容记录在
+[`upstream/firstlight/native_runner/supported_engine.json`](../upstream/firstlight/native_runner/supported_engine.json)，
+可用它核对下载到的安装包。**安装器强制校验的是设备上 `libg.so` 的 SHA-256**：
+版本号相同不保证二进制一致，只有哈希匹配才算通过。
+APK 需要你自备，本项目不分发游戏安装包或原始 SDK（见 [NOTICE](../NOTICE)）。
 
 ## 环境与依赖
 
 | 项目 | 环境要求 |
 | --- | --- |
 | 主机 | Windows；启动与构建脚本面向 PowerShell |
-| 模拟器 | MuMu，启用 Root 与 ADB，连接正确的实例 |
-| 游戏 | ARM64 Null’s Royale，原生库指纹与上述支持版本一致 |
-| 显示 | 1080×1920 竖屏参考布局；首次使用需核对地面与手牌位置 |
-| Python | 3.12 |
+| 显卡 | 默认 `device: cuda:0` 需要 NVIDIA 显卡与支持 CUDA 12.8 的驱动；没有独显或驱动过旧时按 CPU 安装并把 `device` 设为 `cpu`。实测验证环境为 RTX 5080 |
+| 模拟器 | MuMu 模拟器 12，启用 Root 与 ADB，连接正确的实例 |
+| 游戏 | ARM64 Null’s Royale，构建与上一节指纹一致 |
+| 显示 | 1080×1920 竖屏参考布局；首次使用需核对地面与手牌位置，其他分辨率还要重标大厅与结算页坐标 |
+| Python | 3.12（启动检查会核对） |
 | 推理环境 | PyTorch 2.11.0 + CUDA 12.8；另提供 CPU 安装选项 |
+| 其余 Python 依赖 | 版本由 `requirements.txt` 固定，`setup.ps1` 会一并安装 |
 | 上游运行时 | 已随仓库分发于 `upstream/firstlight/`（FirstLight 推理代码与冻结目录数据） |
 | 模型权重 | 已随仓库分发于 `weights/`，共 5 个，见[模型与权重](MODELS.md) |
-| 编译工具 | 使用预编译探针无需 NDK；重新构建与验证使用 NDK r27c |
+| 编译工具 | 使用预编译探针无需 NDK；重新构建与验证使用 NDK r27c（Windows） |
+
+## 需要自备什么
+
+代码、上游运行时与权重都已经在仓库里，剩下的需要你自己准备：
+
+| 需要自备 | 说明 |
+| --- | --- |
+| Windows 电脑 | 无其他操作系统支持 |
+| Python 3.12 | 安装时勾选 Add to PATH，或准备一个可用的 3.12 解释器路径 |
+| MuMu 模拟器 12 | 在模拟器设置里启用 Root 与 ADB |
+| Null’s Royale 安装包 | 必须是指纹匹配的构建；本项目不分发 |
+| 一个游戏账号 | 用你自己的账号登录；账号 ID 稍后从对局快照中确认 |
+| 一场手动对局 | 用于确认账号与核对坐标，需要在 AI 未启动时进行 |
+
+**不需要**准备（常见误会）：Android SDK、JDK、apktool、NDK、CUDA 工具链、
+FirstLight 上游仓库、`IL_Replay` 训练数据集、离线对局引擎或训练/PPO 相关组件。
+NDK 只在你打算重新编译探针时才需要。
 
 不需要获取 FirstLight 上游仓库，也不需要执行上游的离线引擎构建或安装步骤：
 本仓库只保留推理所需部分，训练、PPO、离线对局引擎与策略服务不在其中。

@@ -138,21 +138,27 @@ start_agent.bat        启动菜单
 
 ## 支持范围
 
-- ARM64 版 Null’s Royale、已启用 Root 和 ADB 的 MuMu。
+- Null’s Royale **15.535.13**（`nullsroyale.rel.free`，arm64-v8a），已启用 Root 和 ADB 的 MuMu 模拟器 12。
 - 游戏 `libg.so` SHA-256 必须为
-  `110aa2b5cac391c498645e072b0d88729428c2c2845e7e2737ca8ee979059783`。
-  版本号相同不保证二进制或内容相同；不匹配时安装器会停止。
+  `110aa2b5cac391c498645e072b0d88729428c2c2845e7e2737ca8ee979059783`，
+  版本号相同不保证二进制或内容相同；安装器会核对，不匹配就停止。
+  完整的构建指纹（含 APK 与资源版本）见
+  [`upstream/firstlight/native_runner/supported_engine.json`](upstream/firstlight/native_runner/supported_engine.json)。
+- 默认 `device: cuda:0` 需要 NVIDIA 显卡与支持 CUDA 12.8 的驱动；也可改用 CPU。
 - 参考屏幕布局为竖屏 1080×1920，其他布局需要重新校准。
 - 已重点实机验证速猪及英雄火枪手、觉醒小骷髅、觉醒加农炮。
 - General 使用完整目录；可执行的卡牌形态、英雄技能与塔兵状态取决于桥接层的支持范围。
 - 默认 `reference` 输入基线；`extended` 为精确事件对照实验。完整创建链实验未作为默认功能发布。
 
-详见[架构与边界](docs/ARCHITECTURE.md)、[验证记录](docs/VALIDATION.md)。
+需要自备的东西与安装步骤见[安装、配置与排错](docs/SETUP.md)，
+架构边界见[架构与边界](docs/ARCHITECTURE.md)、[验证记录](docs/VALIDATION.md)。
 
 ## 开始使用
 
-准备 Windows、Python 3.12、启用 Root 和 ADB 的 MuMu，以及匹配上述指纹的游戏。
+准备 Windows（默认走 CUDA 时需要 NVIDIA 显卡）、Python 3.12、启用 Root 和 ADB 的 MuMu 模拟器 12，
+以及构建指纹匹配的 Null’s Royale 安装包（需自备，本项目不分发）。
 FirstLight 推理运行时、冻结目录数据与模型权重已随本仓库分发，无需单独准备。
+逐项清单与"不需要装什么"见[安装、配置与排错](docs/SETUP.md)。
 
 ### 换机快速开始（三步）
 
