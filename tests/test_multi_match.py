@@ -19,19 +19,35 @@ RAW_STATES = {
     'live': {'in_battle': True, 'tick': 100},
     'finalized': {'in_battle': True,
                   'battle_result': {'validated': True, 'finalized': True, 'world_result_raw': 0}},
+    # A phantom in-battle reading: the game steps a battle manager while the
+    # previous result screen is still up, so in_battle is true but the tick
+    # never advances. Must never satisfy the bind check.
+    'live_frozen': {'in_battle': True, 'tick': 3681, '_frozen': True},
 }
 
 
 class FakeProbe:
-    """Serve scripted raw payloads; hold the last state when exhausted."""
+    """Serve scripted raw payloads; hold the last state when exhausted.
+
+    Live readings get an advancing tick, mirroring a real battle.
+    """
 
     def __init__(self, states):
-        self.states = [RAW_STATES[state] for state in states]
+        self.states = [dict(RAW_STATES[state]) for state in states]
         self._last = self.states[-1] if self.states else {'in_battle': False}
+        self._tick = 0
 
     def query(self):
         if self.states:
             self._last = self.states.pop(0)
+        if self._last.get('in_battle'):
+            payload = dict(self._last)
+            if payload.pop('_frozen', False):
+                payload['tick'] = 3681
+            else:
+                self._tick += 10
+                payload['tick'] = self._tick
+            return payload
         return self._last
 
 
@@ -200,6 +216,28 @@ class RematchFlowTests(unittest.TestCase):
             names = [event['event'] for event in events]
             self.assertEqual(names.count('rematch_tap'), 2)
             self.assertEqual(names.count('match_complete'), 2)
+            self.assertEqual(names[-1], 'run_complete')
+
+    def test_phantom_live_readings_never_bind_and_the_match_is_retried(self):
+        with tempfile.TemporaryDirectory() as raw:
+            options = make_options(Path(raw), matches=1, rematch=True,
+                                   matchmaking_timeout=3.0, live_battle_wait=10.0)
+            # The rematch tap registered no queue: only phantom in-battle
+            # readings with a frozen tick follow. The bind must fail, the
+            # child must be killed, and the retry must re-tap rematch and bind
+            # onto the battle that follows.
+            states = (['finalized', 'finalized'] + ['live_frozen'] * 8 + ['live'])
+            spawn = ScriptedSpawn(per_match=[
+                {},
+                {'events': terminal_events('win')}])
+            code, taps, events, _ = run_supervisor(Path(raw), options, states, spawn)
+            self.assertEqual(code, 0)
+            self.assertTrue(spawn.children[0].killed)
+            self.assertFalse(spawn.children[1].killed)
+            names = [event['event'] for event in events]
+            self.assertEqual(names.count('bind_attempt_failed'), 1)
+            self.assertEqual(names.count('launch_retry'), 1)
+            self.assertEqual(names.count('match_finished'), 1)
             self.assertEqual(names[-1], 'run_complete')
 
     def test_remiss_falls_back_to_lobby_battle_button(self):

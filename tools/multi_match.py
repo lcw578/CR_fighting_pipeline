@@ -154,11 +154,20 @@ class MatchSupervisor:
     def ai_log_path(self, number: int) -> Path:
         return self.options.output.parent / f'{self.options.output.stem}_match{number}.jsonl'
 
-    def probe_state(self) -> str:
+    def probe_snapshot(self) -> tuple[str, int | None]:
+        """Return (state, tick) for one probe reading; tick is None when absent."""
+
         try:
-            return classify_probe(self.probe.query())
+            data = self.probe.query()
         except Exception:
-            return 'unreachable'
+            return 'unreachable', None
+        if data is None:
+            return 'unreachable', None
+        tick = data.get('tick')
+        return classify_probe(data), (tick if type(tick) is int else None)
+
+    def probe_state(self) -> str:
+        return self.probe_snapshot()[0]
 
     def prepare(self, label='prepare'):
         """Wait until the game is clear to launch, dismissing stale panels.
@@ -207,25 +216,26 @@ class MatchSupervisor:
         return False
 
     def wait_for_live(self, deadline: float) -> bool:
-        """Bind only on a stable live snapshot; terminal snapshots never bind.
+        """Confirm a real new battle: live state whose tick advances.
 
-        One live reading is not enough: right after a rematch tap the probe
-        can flip from the frozen terminal snapshot through a transient
-        in-battle state that still carries the old battle's frozen tick.
-        Requiring the live state to persist across one poll interval filters
-        that echo out; a real match keeps ticking.
+        The child is already listening, so this runs as verification after
+        launch rather than as a precondition. A phantom reading -- the game
+        briefly stepping a battle manager while the previous result screen is
+        still up -- reports in_battle with a frozen tick, so it can never
+        satisfy the advancing-tick requirement. A real battle ticks every
+        50 ms and satisfies it within one poll interval.
         """
 
-        live_seen_at = None
+        previous_tick = None
         while self._clock() < deadline:
-            if self.probe_state() == 'live':
-                if live_seen_at is None:
-                    live_seen_at = self._clock()
-                elif self._clock() - live_seen_at >= self.options.poll_interval:
-                    self.record('match_bound', basis='probe_live_battle_debounced')
+            state, tick = self.probe_snapshot()
+            if state == 'live':
+                if previous_tick is not None and tick is not None and tick > previous_tick:
+                    self.record('match_bound', basis='probe_tick_advancing', tick=tick)
                     return True
+                previous_tick = tick
             else:
-                live_seen_at = None
+                previous_tick = None
             self._sleep(self.options.poll_interval)
         return False
 
