@@ -152,8 +152,8 @@ class TwoMatchHappyPathTests(unittest.TestCase):
             # Post-battle the probe keeps serving the frozen terminal snapshot:
             # prepare dismisses it once and launches; only a new battle
             # produces 'live' for the bind.
-            states = (['finalized', 'finalized', 'live']
-                      + ['finalized', 'finalized', 'live'])
+            states = (['finalized', 'finalized', 'live', 'live']
+                      + ['finalized', 'finalized', 'live', 'live'])
             spawn = ScriptedSpawn(per_match=[
                 {'events': [{'event': 'battle_start', 'tick': 100},
                             {'event': 'battle_terminal', 'tick': 3000, 'result': 'loss', 'crowns': [2, 0]}]},
@@ -183,8 +183,8 @@ class RematchFlowTests(unittest.TestCase):
     def test_rematch_skips_lobby_and_taps_play_again(self):
         with tempfile.TemporaryDirectory() as raw:
             options = make_options(Path(raw), matches=2, rematch=True)
-            states = (['finalized', 'finalized', 'live']   # match 1: prepare + bind
-                      + ['live'])                            # match 2: rematch queue binds directly
+            states = (['finalized', 'finalized', 'live', 'live']   # match 1: prepare + bind
+                      + ['live', 'live'])                       # match 2: rematch queue binds directly
             spawn = ScriptedSpawn(per_match=[{'events': terminal_events('loss')},
                                              {'events': terminal_events('win')}])
             code, taps, events, _ = run_supervisor(Path(raw), options, states, spawn)
@@ -210,8 +210,8 @@ class RematchFlowTests(unittest.TestCase):
             # the frozen terminal snapshot); attempt 1 times out waiting for
             # the queue, the dismissal round falls back to the lobby flow, and
             # attempt 2 runs with --start-battle and binds.
-            states = (['finalized', 'finalized', 'live']
-                      + ['finalized'] * 5 + ['live'])
+            states = (['finalized', 'finalized', 'live', 'live']
+                      + ['finalized'] * 5 + ['live', 'live'])
             spawn = ScriptedSpawn(per_match=[{'events': terminal_events('loss')},
                                              {},
                                              {'events': terminal_events('win')}])
@@ -240,7 +240,7 @@ class FailClosedTests(unittest.TestCase):
                 {'event': 'battle_start', 'tick': 100},
                 {'event': 'battle_terminal', 'tick': 2500, 'result': 'win', 'crowns': [0, 3]}]}])
             dismiss, trophy, ladder = RESULT_OK_POSITIONS
-            code, taps, events, _ = run_supervisor(Path(raw), options, ['live', 'lobby', 'live'], spawn)
+            code, taps, events, _ = run_supervisor(Path(raw), options, ['live', 'live', 'lobby', 'live', 'live'], spawn)
             self.assertEqual(code, 0)
             self.assertEqual(len(spawn.children), 1)
             self.assertEqual(taps, [dismiss, trophy, ladder] * 3)
@@ -251,7 +251,7 @@ class FailClosedTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             options = make_options(Path(raw), live_battle_wait=2.0)
             spawn = ScriptedSpawn(per_match=[{}])
-            code, taps, events, _ = run_supervisor(Path(raw), options, ['live'], spawn)
+            code, taps, events, _ = run_supervisor(Path(raw), options, ['live', 'live'], spawn)
             self.assertEqual(code, 2)
             self.assertEqual(taps, [])
             self.assertEqual(spawn.children, [])

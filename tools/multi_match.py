@@ -207,12 +207,25 @@ class MatchSupervisor:
         return False
 
     def wait_for_live(self, deadline: float) -> bool:
-        """Bind only on a fresh live snapshot; terminal snapshots never bind."""
+        """Bind only on a stable live snapshot; terminal snapshots never bind.
 
+        One live reading is not enough: right after a rematch tap the probe
+        can flip from the frozen terminal snapshot through a transient
+        in-battle state that still carries the old battle's frozen tick.
+        Requiring the live state to persist across one poll interval filters
+        that echo out; a real match keeps ticking.
+        """
+
+        live_seen_at = None
         while self._clock() < deadline:
             if self.probe_state() == 'live':
-                self.record('match_bound', basis='probe_live_battle')
-                return True
+                if live_seen_at is None:
+                    live_seen_at = self._clock()
+                elif self._clock() - live_seen_at >= self.options.poll_interval:
+                    self.record('match_bound', basis='probe_live_battle_debounced')
+                    return True
+            else:
+                live_seen_at = None
             self._sleep(self.options.poll_interval)
         return False
 
