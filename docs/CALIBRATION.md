@@ -38,3 +38,24 @@
 调整 `point` 和 `size` 后才把 `verified` 改为 `true`。
 当前仅支持 `controller_slot=1` 的该技能按钮；第二英雄控制器不在此标定范围。
 未验证的按钮不会自动点击。不要把自己的 verified 文件打包给其他用户。
+
+## 表情面板
+
+只在需要 `--emote` 时做这一步；不发表情可以完全跳过。
+
+复制 `emote_calibration.example.json` 为 `emote_calibration.local.json`，然后在对局里核对两组坐标：
+
+1. **`emote_button`**：对局内 HUD 左下角的对话框按钮，位于手牌行左侧、`下一张：` 标签上方。
+   参考值 `(106, 1640)`，在 1080×1920 的大头锤卡组对局截图上有叠图确认。
+2. **`emote_slots`**：点开托盘后各个表情的中心。参考文件给的是两行三列。
+   核对方法：把 `emote_first_delay_seconds` 设为 0、`emote_min/max_interval_seconds` 设为 3.5/4.0
+   跑一局，同时在每次 `emote_sent` 后用 `adb exec-out screencap -p` 抓一帧——
+   表情气泡会在我方国王塔旁停留两三秒，逐帧对照即可确认每个槽位。
+
+**不要照搬上游参考里的第四列（x=869）**：它距离 `ABILITY_HUD_BOUNDS` 左边界只有 6 像素，
+误触会消耗 3 圣水。本仓库不采用该列，且 `Actuator.emote` 会用 24 像素余量拒绝过近的槽位。
+
+确认后把 `verified` 改为 `true`。未验证时表情会被禁用并记 `emote_input_disabled`，
+但**不影响对局继续运行**。同样不要把自己的 verified 文件打包给其他用户。
+
+细节与实测数据见 [docs/EMOTE.md](EMOTE.md)。

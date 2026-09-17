@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 settings.local.json
 ability_calibration.local.json
+emote_calibration.local.json
 local/
 logs/
 diagnostics/

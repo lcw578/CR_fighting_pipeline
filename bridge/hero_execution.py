@@ -14,10 +14,16 @@ HERO_FORM_ENTITIES = {MUSKETEER: 203000014, WIZARD: 203000017}
 ABILITY_HUD_BOUNDS = (875, 1350, 1080, 1545)
 
 
-def covered_by_ability_hud(point, size=(1080, 1920)):
+def covered_by_ability_hud(point, size=(1080, 1920), margin=0):
+    """True when ``point`` (device pixels) lands in the hero skill touch region.
+
+    ``margin`` widens the region in reference pixels.  Deployment uses the hard
+    region; the emote tray uses a margin so a tap beside the button cannot
+    drift onto a 3-elixir ability.
+    """
     x, y = point[0] * 1080 / size[0], point[1] * 1920 / size[1]
     left, top, right, bottom = ABILITY_HUD_BOUNDS
-    return left <= x <= right and top <= y <= bottom
+    return left - margin <= x <= right + margin and top - margin <= y <= bottom + margin
 
 
 def ready_abilities(player, entities, bundle, elixir, blocked=()):

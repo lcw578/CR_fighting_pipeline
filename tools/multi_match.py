@@ -104,6 +104,7 @@ class SupervisorOptions:
     recover_attempts: int
     dry_run: bool
     output: Path
+    emote: bool = False
 
 
 @dataclass(frozen=True)
@@ -442,6 +443,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--lobby-settle', type=float, default=2.0, help='Seconds after each result tap')
     parser.add_argument('--poll-interval', type=float, default=0.5)
     parser.add_argument('--dry-run', action='store_true', help='Print and log the plan without ADB, probe, or matches')
+    parser.add_argument('--emote', action='store_true',
+                        help='Pass --emote to each match child: periodic emote while no card action is in flight')
     parser.add_argument('--output', type=Path, default=Path('logs/multi_match_log.jsonl'),
                         help='Supervisor JSONL; per-match AI logs are derived from it')
     return parser
@@ -466,7 +469,7 @@ def options_from_args(args: argparse.Namespace) -> SupervisorOptions:
                              launch_attempts=args.launch_attempts, rematch=args.rematch,
                              unreachable_grace=args.unreachable_grace,
                              recover_attempts=args.recover_attempts,
-                             dry_run=args.dry_run, output=args.output)
+                             dry_run=args.dry_run, output=args.output, emote=args.emote)
 
 
 def real_spawn(options: SupervisorOptions) -> Callable[..., ChildProcess]:
@@ -475,6 +478,8 @@ def real_spawn(options: SupervisorOptions) -> Callable[..., ChildProcess]:
                    '--once', '--log', str(ai_log)]
         if start_battle:
             command.append('--start-battle')
+        if options.emote:
+            command.append('--emote')
         process = subprocess.Popen(command, cwd=BASE_DIR,
                                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         return ChildProcess(process)
@@ -501,7 +506,7 @@ def main() -> int:
 
     logger = JsonlLog(options.output)
     logger.record({'event': 'run_start', 'matches': options.matches, 'checkpoint': options.checkpoint,
-                   'serial': config.ADB_SERIAL, 'dryRun': options.dry_run})
+                   'serial': config.ADB_SERIAL, 'dryRun': options.dry_run, 'emote': options.emote})
     if options.dry_run:
         supervisor = MatchSupervisor(options, logger=logger)
         code = supervisor.run()

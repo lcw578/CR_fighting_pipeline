@@ -78,6 +78,20 @@ if LOCAL_ACCOUNT_ID is not None and (type(LOCAL_ACCOUNT_ID) is not int or LOCAL_
 LOCAL_TOWER_TROOP_ID = None
 CALIBRATION_PATH = configured_path('calibration_path', BASE_DIR / 'calibration.json')
 ABILITY_CALIBRATION_PATH = configured_path('ability_calibration_path', BASE_DIR / 'ability_calibration.local.json')
+# In-battle emote tray. Off unless the run asks for it and the tray geometry is
+# confirmed on this HUD; see emote_calibration.example.json.
+EMOTE_CALIBRATION_PATH = configured_path('emote_calibration_path', BASE_DIR / 'emote_calibration.local.json')
+EMOTE_TRAY_OPEN_SECONDS = float(SETTINGS.get('emote_tray_open_seconds', .12))
+EMOTE_MIN_INTERVAL_SECONDS = float(SETTINGS.get('emote_min_interval_seconds', 20.0))
+EMOTE_MAX_INTERVAL_SECONDS = float(SETTINGS.get('emote_max_interval_seconds', 35.0))
+EMOTE_FIRST_DELAY_SECONDS = float(SETTINGS.get('emote_first_delay_seconds', 15.0))
+# The tray sits beside the hero skill button; keep a margin so a later
+# calibration edit cannot land an emote tap on a 3-elixir ability.
+EMOTE_ABILITY_HUD_MARGIN = float(SETTINGS.get('emote_ability_hud_margin', 24.0))
+if not 0 < EMOTE_MIN_INTERVAL_SECONDS <= EMOTE_MAX_INTERVAL_SECONDS:
+    raise ValueError('emote intervals must satisfy 0 < min <= max')
+if EMOTE_TRAY_OPEN_SECONDS < 0 or EMOTE_FIRST_DELAY_SECONDS < 0 or EMOTE_ABILITY_HUD_MARGIN < 0:
+    raise ValueError('emote delays and the HUD margin cannot be negative')
 DECISION_TICKS = 5
 TICK_SECONDS = 0.05
 STALE_SECONDS = 1.2

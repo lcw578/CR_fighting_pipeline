@@ -74,6 +74,23 @@ class Actuator:
     def tap(self, px, py):
         return self._command(f'input tap {int(px)} {int(py)}')
 
+    def emote(self, button, slot):
+        """Open the emote tray and pick one slot as a single shell command.
+
+        One command matters here: ``_command`` holds the ADB lane for its whole
+        duration, so a queued card deploy cannot slip in between "tray open"
+        and "slot picked" and leave the tray covering the arena.
+        """
+        if self.size is None:
+            self.prepare()
+        if covered_by_ability_hud(slot, self.size, config.EMOTE_ABILITY_HUD_MARGIN):
+            raise ValueError('emote slot too close to the hero ability HUD')
+        bx, by = int(button[0]), int(button[1])
+        sx, sy = int(slot[0]), int(slot[1])
+        duration = self._command(f'input tap {bx} {by}; sleep {config.EMOTE_TRAY_OPEN_SECONDS:.3f}; '
+                                 f'input tap {sx} {sy}')
+        return {'button': [bx, by], 'slot': [sx, sy], 'input_ms': duration * 1000}
+
     def deploy_action(self, action):
         if self.size is None:
             self.prepare()

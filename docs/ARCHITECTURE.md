@@ -42,6 +42,7 @@ flowchart TD
 | `bridge/area_state.py` | 区域／法术影响范围 |
 | `bridge/reference_events.py` | 默认基线的近期事件快照差分 |
 | `bridge/hero_execution.py` | 英雄技能按钮的坐标与点击前置条件 |
+| `bridge/emote.py` | 表情托盘坐标与调度；仅在空闲窗口发送（见 [EMOTE.md](EMOTE.md)） |
 | `agent/feature_adapter.py` | 观测组装、动作掩码、两套输入方案的装配 |
 | `agent/policy_engine.py` | 载入权重、预热、决策与动作序列解码 |
 | `agent/execution.py` | 动作队列、时效与合法性检查、执行结果确认 |
@@ -59,6 +60,9 @@ flowchart TD
 - 确认来自游戏状态变化：手牌变化记为 `hand_ack`，技能消耗记为 `ability_ack`，
   觉醒循环归零记为 `evolution_ack`，超时记为 `ack_timeout`。
   发送成功不能替代这些确认。
+- 表情（`--emote`，默认关闭）走同一条 ADB 通道，但不在动作队列里：它在决策块之后、
+  执行器完全空闲时才发送，一次是一条「开托盘 + 点槽位」的复合命令，失败只停用本局表情。
+  实测每次占用主循环约 160 ms、最多把一次决策推迟一个 tick，不会取消动作。见 [EMOTE.md](EMOTE.md)。
 
 ## 上游运行时的范围
 

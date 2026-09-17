@@ -1,0 +1,8 @@
+{
+  "size": [1080, 1920],
+  "emote_button": [106, 1640],
+  "emote_slots": [[280, 1265], [475, 1265], [672, 1265],
+                  [280, 1438], [475, 1438], [672, 1438]],
+  "verified": false,
+  "evidence": "Reference only. The tray button was observed near (93,1657) on a 2026-09-13 1080x1920 Null's Royale battle capture, which agrees with (106,1640); the slot centres themselves are unverified on this HUD. The upstream reference also lists a fourth column at x=869, which is 6 px from ABILITY_HUD_BOUNDS and is deliberately omitted. Open the tray on your own HUD, confirm each slot, then set verified=true."
+}

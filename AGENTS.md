@@ -14,6 +14,8 @@
 - 手动安装步骤：[docs/SETUP.md](docs/SETUP.md)。
 - 选择模型或说明权重来历：[docs/MODELS.md](docs/MODELS.md)。
 - 多局自动化（含天梯"再来一场"直连下一局）：`tools/multi_match.py --help`。
+- 改动表情开关、间隔或托盘坐标：先看 [docs/EMOTE.md](docs/EMOTE.md)；
+  坐标核对步骤在 [docs/CALIBRATION.md](docs/CALIBRATION.md) 的“表情面板”。
 - 修改观测或执行逻辑：先看 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 - 打包公开版本：[docs/RELEASE.md](docs/RELEASE.md)。
 

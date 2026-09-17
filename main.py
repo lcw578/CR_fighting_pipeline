@@ -1,6 +1,7 @@
 """Real-time V4 inference and acknowledged Android card deployment."""
 import argparse
 import json
+import random
 import sys
 import time
 import traceback
@@ -11,6 +12,7 @@ if str(config.FIRSTLIGHT_DIR) not in sys.path:
     sys.path.insert(0, str(config.FIRSTLIGHT_DIR))
 from bridge.probe_client import ProbeClient
 from bridge.actuator import Actuator
+from bridge.emote import EmoteScheduler, emote_allowed, emote_points
 from agent.feature_adapter import FeatureAdapter, HOG_26_DECK, TelemetryError
 from agent.policy_engine import PolicyEngine
 from agent.execution import ActionExecutor
@@ -18,10 +20,15 @@ from native_runner.training.v4.expert import FIRST_POLICY_DECISION_TICK
 
 
 class CustomCardDeployAgent:
+    # Fail-safe default so a harness that builds the agent without __init__
+    # (see tests/test_recovery.py) simply never sends an emote.
+    emote_enabled = False
+
     def __init__(self, checkpoint_path=None, device_str='cuda:0', *, dry_run=False,
                  account_id=config.LOCAL_ACCOUNT_ID, owner=None, sample=False,
                  oracle_elixir=False, log_path=None, own_tower=None, hero_musketeer=None,
-                 observation_profile=config.DEFAULT_OBSERVATION_PROFILE, experimental_origins=False):
+                 observation_profile=config.DEFAULT_OBSERVATION_PROFILE, experimental_origins=False,
+                 emote=False):
         checkpoint = Path(checkpoint_path or config.DEFAULT_CHECKPOINT)
         self.probe = ProbeClient(port=config.PROBE_PORT, account_id=account_id, owner=owner)
         specialist = 'hog' in str(checkpoint).lower()
@@ -40,6 +47,7 @@ class CustomCardDeployAgent:
         self.engine = PolicyEngine(checkpoint, device_str, sample)
         self.running = False
         self.dry_run = dry_run
+        self.emote_enabled = emote
 
     def log(self, event, **data):
         record = {'event': event, 'wall_time': time.time(),
@@ -93,13 +101,23 @@ class CustomCardDeployAgent:
                 self.adapter.hero_skill_ready = True
             except (OSError, ValueError, KeyError, TypeError, ZeroDivisionError) as exc:
                 self.log('ability_input_disabled', reason=str(exc))
+        # Emotes are advisory: a missing or unverified tray only disables them.
+        emote = None
+        if self.emote_enabled:
+            try:
+                button, slots = emote_points(config.EMOTE_CALIBRATION_PATH, self.actuator.size)
+                emote = EmoteScheduler(button, slots, first_delay=config.EMOTE_FIRST_DELAY_SECONDS,
+                    min_interval=config.EMOTE_MIN_INTERVAL_SECONDS,
+                    max_interval=config.EMOTE_MAX_INTERVAL_SECONDS, now=time.perf_counter())
+            except (OSError, ValueError, KeyError, TypeError, ZeroDivisionError) as exc:
+                self.log('emote_input_disabled', reason=str(exc))
         self.log('ready', dry_run=self.dry_run, checkpoint=str(self.engine.checkpoint_path),
                  stage=self.engine.meta.get('training_stage'), account_id=self.probe.known_account_id,
                  form_detection='auto' if self.adapter.hero_mode is None else 'explicit',
                  observation_profile=self.adapter.observation_profile,
                  experimental_origins=self.adapter.experimental_origins,
                  hero_skill_input_ready=self.adapter.hero_skill_ready,
-                 size=self.actuator.size, log=str(self.log_path))
+                 emote_enabled=self.emote_enabled, size=self.actuator.size, log=str(self.log_path))
         if start_battle:
             self.actuator.tap(*config.LOBBY_BATTLE_BTN)
         try:
@@ -236,6 +254,28 @@ class CustomCardDeployAgent:
                             decision_to_queue_ms=(time.perf_counter()-decision_ready_at)*1000)
                 except TelemetryError as exc:
                     self.log('telemetry_rejected', tick=state.tick, error=str(exc))
+                # Emotes only fill an idle window, and only after the decision
+                # block, so they can never delay or preempt a policy action.
+                # The tick floor keeps them off the pre-battle transition,
+                # where the tray does not exist yet.
+                if state.tick >= FIRST_POLICY_DECISION_TICK and emote_allowed(emote, self.executor, now):
+                    index = emote.pick()
+                    if self.dry_run:
+                        self.log('dry_run_emote', tick=state.tick, index=index,
+                                 button=list(emote.button), slot=list(emote.slots[index]))
+                    else:
+                        try:
+                            receipt = self.actuator.emote(emote.button, emote.slots[index])
+                        except (RuntimeError, OSError, ValueError) as exc:
+                            # An emote is advisory: a refused or ambiguous tap
+                            # disables the rest of this match's emotes rather
+                            # than disturbing the battle, and is never replayed.
+                            emote = None
+                            self.log('emote_disabled', reason=str(exc))
+                        else:
+                            self.log('emote_sent', tick=state.tick, index=index, **receipt)
+                    if emote is not None:
+                        emote.reschedule(time.perf_counter())
                 # Refresh telemetry promptly while an already-decided action
                 # approaches its due time; do not change the model's cadence.
                 time.sleep(.001 if any(p.state == 'queued' for p in self.executor.pending) else .015)
@@ -274,6 +314,8 @@ def parse_args(argv=None):
     parser.add_argument('--seconds', type=float, default=0)
     parser.add_argument('--once', action='store_true', help='run one battle; pause on telemetry loss and resume the same battle')
     parser.add_argument('--start-battle', action='store_true', help='tap battle once after loading; lobby must be visible')
+    parser.add_argument('--emote', action='store_true',
+        help='send a periodic emote from the verified tray calibration, only while no card action is in flight')
     parser.add_argument('--log', type=Path)
     args = parser.parse_args(argv)
     if args.experimental_origins and args.observation_profile != 'extended':
@@ -287,7 +329,7 @@ def main(argv=None):
         device_str=args.device, dry_run=args.dry_run, account_id=args.account_id, owner=args.owner,
         sample=args.sample, oracle_elixir=args.oracle_elixir, log_path=args.log, own_tower=args.own_tower,
         hero_musketeer=args.hero_musketeer, observation_profile=args.observation_profile,
-        experimental_origins=args.experimental_origins)
+        experimental_origins=args.experimental_origins, emote=args.emote)
     try:
         agent.run(args.seconds, args.once, args.start_battle)
     except KeyboardInterrupt:
