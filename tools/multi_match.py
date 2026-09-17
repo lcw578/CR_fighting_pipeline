@@ -100,6 +100,8 @@ class SupervisorOptions:
     result_rounds: int
     launch_attempts: int
     rematch: bool
+    unreachable_grace: float
+    recover_attempts: int
     dry_run: bool
     output: Path
 
@@ -118,6 +120,9 @@ class ChildProcess:
 
     def wait(self, timeout: float) -> int:
         return self._process.wait(timeout=timeout)
+
+    def poll(self) -> int | None:
+        return self._process.poll()
 
     def kill(self) -> None:
         self._process.kill()
@@ -239,6 +244,32 @@ class MatchSupervisor:
             self._sleep(self.options.poll_interval)
         return False
 
+    def wait_child(self, child: ChildProcess, deadline: float) -> str:
+        """Wait for the match child while watching the probe for a dead game.
+
+        Returns 'finished' when the child exits, 'game_lost' when the probe
+        stays unreachable past the grace window (the emulator or game process
+        died mid-battle), and 'timeout' when neither happens in budget. The
+        child cannot outlive its game, so a lost game is reported promptly
+        instead of burning the whole battle budget on it.
+        """
+
+        unreachable_since = None
+        while self._clock() < deadline:
+            if child.poll() is not None:
+                return 'finished'
+            state = self.probe_state()
+            if state == 'unreachable':
+                if unreachable_since is None:
+                    unreachable_since = self._clock()
+                elif self._clock() - unreachable_since >= self.options.unreachable_grace:
+                    self.record('game_unreachable', seconds=self._clock() - unreachable_since)
+                    return 'game_lost'
+            else:
+                unreachable_since = None
+            self._sleep(self.options.poll_interval)
+        return 'timeout'
+
     def dismiss_overlays(self) -> None:
         """One round: a single tap at each known OK position; never the center.
 
@@ -273,7 +304,8 @@ class MatchSupervisor:
             return None
         return terminal
 
-    def run_one(self, number: int) -> bool:
+    def run_one(self, number: int) -> str:
+        """Run one match. Returns 'ok', 'fail', or 'recover' (game died)."""
         self._match_number = number
         self.enter('PREPARE')
         if self.options.dry_run:
@@ -288,14 +320,14 @@ class MatchSupervisor:
             for _ in range(self.options.result_rounds):
                 for coordinate in RESULT_OK_POSITIONS:
                     self.record('result_tap', coordinate=list(coordinate), basis='dry_run')
-            return True
+            return 'ok'
 
         # Match 1 (or a rematch that failed last time) needs the lobby flow;
         # rematch runs skip the lobby entirely and tap 再来一场 on the result
         # screen instead.
         if not (self.options.rematch and number > 1 and self.last_rematch_armed):
             if not self.prepare():
-                return False
+                return 'fail'
         use_start_battle = not (self.options.rematch and number > 1)
         ai_log = self.ai_log_path(number)
         for attempt in range(1, self.options.launch_attempts + 1):
@@ -320,13 +352,16 @@ class MatchSupervisor:
                     self.record('bind_attempt_failed', attempt=attempt)
                     continue
                 self.enter('VERIFY')
-                try:
-                    child.wait(max(0.0, deadline - self._clock()))
-                except subprocess.TimeoutExpired:
+                outcome = self.wait_child(child, deadline)
+                if outcome == 'game_lost':
+                    child.kill()
+                    self.last_rematch_armed = False
+                    return 'recover'
+                if outcome == 'timeout':
                     child.kill()
                     self.record('match_failed', reason='battle_timeout')
                     self.last_rematch_armed = False
-                    return False
+                    return 'fail'
             except BaseException:
                 child.kill()
                 raise
@@ -334,7 +369,7 @@ class MatchSupervisor:
             if terminal is None:
                 self.record('match_failed', reason='missing_battle_terminal', child_returncode=child.wait(0))
                 self.last_rematch_armed = False
-                return False
+                return 'fail'
             self.record('match_finished', result=terminal.get('result'), crowns=terminal.get('crowns'),
                         tick=terminal.get('tick'))
             self.enter('RESULT_OK')
@@ -348,22 +383,37 @@ class MatchSupervisor:
                 for _ in range(self.options.result_rounds):
                     self.dismiss_overlays()
             self.record('match_complete', result=terminal.get('result'))
-            return True
+            return 'ok'
         self.record('match_failed', reason='battle_tap_no_effect')
         self.last_rematch_armed = False
-        return False
+        return 'fail'
 
     def run(self) -> int:
-        for number in range(1, self.options.matches + 1):
+        number = 1
+        recoveries = 0
+        while number <= self.options.matches:
             try:
-                succeeded = self.run_one(number)
+                outcome = self.run_one(number)
             except Exception as error:
                 self.record('match_failed', reason='supervisor_exception', error=repr(error))
                 print(f'[{number}] session failed: {error!r}', flush=True)
                 return 2
-            if not succeeded:
-                return 2
-        self.record('run_complete', matches=self.options.matches)
+            if outcome == 'ok':
+                number += 1
+                continue
+            if outcome == 'recover' and recoveries < self.options.recover_attempts and self.restart is not None:
+                recoveries += 1
+                self.record('session_recover', match=number, attempt=recoveries,
+                            reason='game_lost_mid_battle')
+                print(f'[{number}] game lost mid-battle; restarting it and retrying', flush=True)
+                try:
+                    self.restart()
+                except Exception as error:
+                    self.record('match_failed', reason='restart_failed', error=repr(error))
+                    return 2
+                continue
+            return 2
+        self.record('run_complete', matches=self.options.matches, recoveries=recoveries)
         return 0
 
 
@@ -377,6 +427,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help='Seconds to wait for the tapped battle to produce a live battle')
     parser.add_argument('--live-battle-wait', type=float, default=300.0,
                         help='Seconds to wait out a live battle nobody is driving before failing')
+    parser.add_argument('--unreachable-grace', type=float, default=45.0,
+                        help='Seconds the probe may stay unreachable mid-battle before the session restarts the game')
+    parser.add_argument('--recover-attempts', type=int, default=5,
+                        help='Mid-session game restarts allowed when the emulator or game dies; then the session stops')
     parser.add_argument('--result-rounds', type=int, default=3,
                         help='Result dismissal rounds; milestone wins queue several OK pages')
     parser.add_argument('--launch-attempts', type=int, default=3,
@@ -397,19 +451,21 @@ def options_from_args(args: argparse.Namespace) -> SupervisorOptions:
     if args.matches < 1:
         raise ValueError('--matches must be positive')
     numeric = {'battle_timeout': args.battle_timeout, 'matchmaking_timeout': args.matchmaking_timeout,
-               'live_battle_wait': args.live_battle_wait,
+               'live_battle_wait': args.live_battle_wait, 'unreachable_grace': args.unreachable_grace,
                'result_settle': args.result_settle, 'lobby_settle': args.lobby_settle,
                'poll_interval': args.poll_interval}
     if any(value <= 0 for value in numeric.values()):
         raise ValueError('timeouts, settle windows, and poll interval must be positive')
-    if args.result_rounds < 1 or args.launch_attempts < 1:
-        raise ValueError('result rounds and launch attempts must be positive')
+    if args.result_rounds < 1 or args.launch_attempts < 1 or args.recover_attempts < 0:
+        raise ValueError('result rounds and launch attempts must be positive; recover attempts cannot be negative')
     return SupervisorOptions(checkpoint=args.checkpoint, matches=args.matches,
                              battle_timeout=args.battle_timeout, matchmaking_timeout=args.matchmaking_timeout,
                              live_battle_wait=args.live_battle_wait,
                              result_settle=args.result_settle, lobby_settle=args.lobby_settle,
                              poll_interval=args.poll_interval, result_rounds=args.result_rounds,
                              launch_attempts=args.launch_attempts, rematch=args.rematch,
+                             unreachable_grace=args.unreachable_grace,
+                             recover_attempts=args.recover_attempts,
                              dry_run=args.dry_run, output=args.output)
 
 

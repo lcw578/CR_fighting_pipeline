@@ -23,6 +23,8 @@ RAW_STATES = {
     # previous result screen is still up, so in_battle is true but the tick
     # never advances. Must never satisfy the bind check.
     'live_frozen': {'in_battle': True, 'tick': 3681, '_frozen': True},
+    # The emulator or game process is gone: the probe socket refuses.
+    'unreachable': None,
 }
 
 
@@ -33,13 +35,15 @@ class FakeProbe:
     """
 
     def __init__(self, states):
-        self.states = [dict(RAW_STATES[state]) for state in states]
+        self.states = [None if RAW_STATES[state] is None else dict(RAW_STATES[state]) for state in states]
         self._last = self.states[-1] if self.states else {'in_battle': False}
         self._tick = 0
 
     def query(self):
         if self.states:
             self._last = self.states.pop(0)
+        if self._last is None:
+            return None
         if self._last.get('in_battle'):
             payload = dict(self._last)
             if payload.pop('_frozen', False):
@@ -67,9 +71,25 @@ class FakeChild:
         self.ai_log = ai_log
         self.events = events
         self.returncode = returncode
+        # A hung child models the battle that never ends: it stays alive
+        # (poll returns None) until the supervisor kills it.
         self.raise_timeout = raise_timeout
         self.killed = False
         self.waited = 0
+        self.write_log()
+
+    def poll(self):
+        """Mirror Popen.poll: report the exit code once the child is done.
+
+        raise_timeout models a child that keeps running: it either hangs until
+        the supervisor kills it (battle timeout) or keeps running while the
+        game itself is gone (game_lost). Both end at kill().
+        """
+        if self.killed:
+            return self.returncode
+        if self.raise_timeout:
+            return None
+        return self.returncode
 
     def write_log(self):
         with self.ai_log.open('w', encoding='utf-8') as stream:
@@ -78,8 +98,7 @@ class FakeChild:
 
     def wait(self, timeout):
         self.waited = timeout
-        self.write_log()
-        if self.raise_timeout:
+        if self.raise_timeout and not self.killed:
             raise subprocess.TimeoutExpired('main.py', timeout)
         return self.returncode
 
@@ -108,8 +127,8 @@ class ScriptedSpawn:
 def make_options(tmp, matches=1, **overrides):
     values = dict(checkpoint='hog26', matches=matches, battle_timeout=600.0, matchmaking_timeout=45.0,
                   live_battle_wait=300.0, result_settle=3.0, lobby_settle=2.0, poll_interval=0.5,
-                  result_rounds=3, launch_attempts=2, rematch=False, dry_run=False,
-                  output=Path(tmp) / 'multi' / 'session.jsonl')
+                  result_rounds=3, launch_attempts=2, rematch=False, unreachable_grace=45.0,
+                  recover_attempts=5, dry_run=False, output=Path(tmp) / 'multi' / 'session.jsonl')
     values.update(overrides)
     return SupervisorOptions(**values)
 
@@ -217,6 +236,47 @@ class RematchFlowTests(unittest.TestCase):
             self.assertEqual(names.count('rematch_tap'), 2)
             self.assertEqual(names.count('match_complete'), 2)
             self.assertEqual(names[-1], 'run_complete')
+
+    def test_game_lost_mid_battle_restarts_and_retries_the_match(self):
+        with tempfile.TemporaryDirectory() as raw:
+            options = make_options(Path(raw), matches=1, unreachable_grace=2.0, recover_attempts=3)
+            # The game dies mid-battle: the probe goes unreachable right after
+            # binding. The session must restart the game, retry the match, and
+            # return to the lobby for the retry rather than burning the whole
+            # battle budget waiting on a corpse.
+            states = (['finalized']                      # prepare: dismiss stale panel
+                      + ['live', 'live']                 # bind
+                      + ['unreachable'] * 6              # game process gone
+                      + ['finalized']                    # prepare for the retry
+                      + ['live', 'live']                 # retry binds
+                      + ['finalized'])
+            spawn = ScriptedSpawn(per_match=[{'raise_timeout': True},  # still running when the game dies
+                                             {'events': terminal_events('win')}])
+            restarts = []
+            code, taps, events, _ = run_supervisor(Path(raw), options, states, spawn,
+                                                   restart=lambda: restarts.append(1))
+            self.assertEqual(code, 0)
+            self.assertEqual(len(restarts), 1)
+            self.assertTrue(spawn.children[0].killed)
+            names = [event['event'] for event in events]
+            self.assertEqual(names.count('game_unreachable'), 1)
+            self.assertEqual(names.count('session_recover'), 1)
+            self.assertEqual(names.count('match_finished'), 1)
+            self.assertEqual(names[-1], 'run_complete')
+
+    def test_repeated_game_loss_gives_up_after_the_recover_budget(self):
+        with tempfile.TemporaryDirectory() as raw:
+            options = make_options(Path(raw), matches=1, unreachable_grace=2.0, recover_attempts=1)
+            spawn = ScriptedSpawn(per_match=[{'raise_timeout': True}, {'raise_timeout': True}])
+            restarts = []
+            # Every attempt binds, then the game is gone and never comes back.
+            states = (['finalized', 'live', 'live'] + ['unreachable'] * 6
+                      + ['finalized', 'live', 'live'] + ['unreachable'] * 6)
+            code, taps, events, _ = run_supervisor(Path(raw), options, states, spawn,
+                                                   restart=lambda: restarts.append(1))
+            self.assertEqual(code, 2)
+            self.assertEqual(len(restarts), 1)  # one recovery, then the session stops
+            self.assertEqual(len(spawn.children), 2)
 
     def test_phantom_live_readings_never_bind_and_the_match_is_retried(self):
         with tempfile.TemporaryDirectory() as raw:
