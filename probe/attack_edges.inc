@@ -123,18 +123,29 @@ void attack_buff(void *component,void *entry) {
 }
 bool install_attack_edges() {
     using namespace cr_phase_runtime;
-    const uintptr_t offsets[]={kActionDispatchOffset,kAttackExecuteOffset,kTargetSetOffset,kAttackScaleOffset,kBuffAddedOffset};
-    const uint8_t *bytes[]={kActionDispatchPrologue,kAttackExecutePrologue,kTargetSetPrologue,kAttackScalePrologue,kBuffAddedPrologue};
-    for (int i=0;i<5;++i) if (memcmp(reinterpret_cast<void*>(g_libg_base+offsets[i]),bytes[i],16)) return false;
+    // The four standard hook sites. Their entries are either the original
+    // prologue or, once the emulator's ARM translator has translated the
+    // function, its in-place jump stub; install_inline_hook accepts both.
+    const uintptr_t offsets[]={kAttackExecuteOffset,kTargetSetOffset,kAttackScaleOffset,kBuffAddedOffset};
+    const uint8_t *bytes[]={kAttackExecutePrologue,kTargetSetPrologue,kAttackScalePrologue,kBuffAddedPrologue};
+    for (int i=0;i<4;++i) if (!entry_matches(reinterpret_cast<const uint8_t*>(g_libg_base+offsets[i]),bytes[i],16)) return false;
     // Observe the already-taken cycle-start branch BEFORE its optional action
     // check. Re-execute all four stolen instructions with both original routes.
     const uint32_t start_words[]={0xf940bea2,0xb4000082,0xaa1403e0,0xaa1403e1};
     const uint32_t release_words[]={0xf940ca82,0xaa1303e0,0xaa1803e1,0x97ff0c7c};
     if (memcmp(reinterpret_cast<void*>(g_libg_base+0xf61a68),start_words,16) ||
         memcmp(reinterpret_cast<void*>(g_libg_base+0xf5ff14),release_words,16)) return false;
-    // The original first instruction is PC-relative CBZ x2; copy only the
-    // following stack prologue, preserving the null branch in the wrapper.
+    // The dispatch wrapper re-executes the instructions it steals from the entry
+    // (copying target+4 for 12 bytes, then resuming at target+16), so it is only
+    // valid while the entry still holds the original code. Under the translator
+    // the entry is a jump stub and those bytes are the middle of the stub, which
+    // would be meaningless to replay. Skip that one hook in that case and keep
+    // the four above; they still report attack reset, timing scale, stop effect
+    // and the release attempt.
     auto *target=reinterpret_cast<uint8_t*>(g_libg_base+kActionDispatchOffset);
+    if (entry_is_translator_stub(target,16)) {
+        LOGE("attack dispatch entry holds a translator stub at %p; dispatch hook skipped",target);
+    } else {
     void *trampoline=mmap(nullptr,32,PROT_READ|PROT_WRITE|PROT_EXEC,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
     if (trampoline==MAP_FAILED) return false;
     memcpy(trampoline,target+4,12); emit_absolute_jump(static_cast<uint8_t*>(trampoline)+12,target+16);
@@ -144,6 +155,7 @@ bool install_attack_edges() {
     emit_absolute_jump(target,reinterpret_cast<void*>(&attack_dispatch));
     __builtin___clear_cache(reinterpret_cast<char*>(target),reinterpret_cast<char*>(target+16));
     make_page_writable(target,PROT_READ|PROT_EXEC);
+    }
     bool ok=true;
     ok &= install_inline_hook(g_libg_base+kAttackExecuteOffset,kAttackExecutePrologue,16,reinterpret_cast<void*>(&attack_execute),reinterpret_cast<void**>(&g_execute),"attack release");
     ok &= install_inline_hook(g_libg_base+kTargetSetOffset,kTargetSetPrologue,16,reinterpret_cast<void*>(&attack_target),reinterpret_cast<void**>(&g_target),"attack reset");

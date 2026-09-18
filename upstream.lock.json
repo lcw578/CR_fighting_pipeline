@@ -1,7 +1,7 @@
 {
   "repository": "https://gitlab.com/firstlight3/FirstLight_CR",
   "commit": "28d66cc0a5d65888515e22fdf22f11d783b65efb",
-  "note": "Deployment-only subset of the upstream pinned files, vendored into upstream/firstlight (modules + frozen data) and weights/. Hashes are carried over from the upstream lock for provenance; re-verify against upstream commit 28d66cc0a5d6 when in doubt.",
+  "note": "Deployment-only subset of the upstream pinned files, vendored into upstream/firstlight (modules + frozen data) and weights/. Only what the deployment imports is vendored: the runtime modules reachable from main.py/tools/, the frozen competitive catalog data under native_runner/data/, and the five weights. Upstream's own test suite, its original probe source, the offline resource compiler and the training/authoring experiments are deliberately not vendored; see removed_non_deployment_paths and dropped_training_only_files. Hashes are carried over from the upstream lock for provenance; re-verify against upstream commit 28d66cc0a5d6 when in doubt.",
   "files": {
     "native_runner/battle_env.py": "a6657739e83d78f6050eee6821d05a762857a97ea5176a005ec4faf4f81a8280",
     "native_runner/competitive_data.py": "d12ee4ab54f8083176e4890d88111e80814cc929cfc948ca506cb020724ba395",
@@ -70,5 +70,22 @@
     "native_runner/training/v4/train_imitation_cache.py",
     "native_runner/training/v4/train_ppo_self_play_cluster.py"
   ],
+  "removed_non_deployment_paths": {
+    "note": "Whole upstream trees that the deployment never imports. None of these are reachable from main.py, tools/, bridge/ or agent/, and none are referenced by this repository's build or run scripts.",
+    "paths": [
+      "native_runner/tests/",
+      "native_runner/probe/",
+      "native_runner/resource_compiler/",
+      "native_runner/tools/experiments/",
+      ".env.example"
+    ],
+    "reasons": {
+      "native_runner/tests/": "Upstream's own suite (52 files); needs pytest, which requirements.txt does not install, and this project runs its own unittest suite under tests/ instead.",
+      "native_runner/probe/": "Upstream's original probe source. probe/build_probe.ps1 builds only from the top-level probe/ sources, so this tree is provenance documentation, not a build input.",
+      "native_runner/resource_compiler/": "Offline APK resource compilation. competitive_data.py marks its audit path as compiler-only; runtime reads the already-compiled frozen facts.",
+      "native_runner/tools/experiments/": "Authoring experiment for a hog expert manifest; no runtime consumer.",
+      ".env.example": "Upstream offline-engine workflow sample. This deployment reads CR_AGENT_SETTINGS and settings.local.json, never .env."
+    }
+  },
   "hash_format": "sha256; normalize CRLF to LF for .py/.json/.md/.gitattributes; other files raw"
 }

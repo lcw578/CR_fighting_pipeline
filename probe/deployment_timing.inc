@@ -69,7 +69,7 @@ bool install_client_input_observer() {
     const uint8_t bytes[]={0xff,0x43,0x01,0xd1,0xfd,0x7b,0x01,0xa9,
                            0xf8,0x5f,0x02,0xa9,0xf6,0x57,0x03,0xa9};
     auto *target=reinterpret_cast<void*>(g_libg_base+0xc89778);
-    if (memcmp(target,bytes,16)) return false;
+    if (!entry_matches(static_cast<const uint8_t*>(target),bytes,16)) return false;
     return install_inline_hook(g_libg_base+0xc89778,bytes,16,
         reinterpret_cast<void*>(client_input_observer),
         reinterpret_cast<void**>(&g_client_input_original),"client input timing");

@@ -18,7 +18,8 @@ flowchart TD
 ## 三层
 
 1. **感知**：`probe` 在支持的游戏库上只读采集状态，`bridge` 校验身份、坐标、卡牌、持续效果、来源和时间。
-   探针本身不做决策，也不改变游戏逻辑。
+   探针本身不做决策，也不改变游戏逻辑。探针的钩子清单、安装／恢复、
+   以及环境变化后的重新适配见[原生探针](PROBE.md)。
 2. **推理**：`agent/feature_adapter.py` 把状态投影为原版 V4 合约，复用上游词表、张量化和权重。
    保留 LSTM、上一动作历史、每 5 tick 决策窗口和顺序微动作；**不改权重**。
 3. **执行**：`bridge/actuator.py` 经 ADB 发送 Android 触摸；`agent/execution.py` 排队、检查时效和合法性、
@@ -74,8 +75,11 @@ flowchart TD
   以及上游大部分测试。
 
 因此本仓库可以加载权重、生成观测、解码动作，但**不能**训练、微调或重新导出权重。
-随包仍保留了上游 `native_runner/tests/`（52 个文件，其中 41 个依赖 pytest），
-它们既不在 `requirements.txt` 里也不由本项目运行；本项目的回归测试在 `tests/` 下，用标准库 `unittest` 运行。
+裁剪按"部署是否导入"来判定：只保留 `main.py`、`tools/`、`bridge/`、`agent/` 实际可达的运行时模块、
+`native_runner/data/` 下的冻结目录数据，以及 5 个权重。上游自带的 `native_runner/tests/`、
+原始探针源码 `native_runner/probe/`、离线资源编译器 `native_runner/resource_compiler/`
+与创作期实验脚本都不随包分发；逐项理由记在 `upstream.lock.json` 的
+`removed_non_deployment_paths`。本项目的回归测试在 `tests/` 下，用标准库 `unittest` 运行。
 `upstream.lock.json` 记录上游仓库、提交 `28d66cc0a5d65888515e22fdf22f11d783b65efb`、
 被固定的 35 个文件（30 个运行时模块与数据 + 5 个权重）的 SHA-256，以及被裁掉的训练专用文件清单。
 启动检查会按该清单核对 `upstream/firstlight/` 与 `weights/` 的内容。

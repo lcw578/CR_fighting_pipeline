@@ -1,0 +1,121 @@
+{
+  "schema": "nulls-probe-build.v1",
+  "profile": "stable",
+  "validation": "live_validated_on_updated_emulator",
+  "producer_origins": false,
+  "sha256": "a63b1826b87cd390b08a0fc69884830b16f3fcbad4cc88dcb01edf964a18530c",
+  "built_utc": "2026-09-18T01:05:00.1333630Z",
+  "compiler": "D:/AndroidSDK/ndk/27.3.13750724/toolchains/llvm/prebuilt/windows-x86_64/bin/aarch64-linux-android24-clang++.cmd",
+  "compiler_args": [
+    "-std=c++17",
+    "-O2",
+    "-fPIC",
+    "-fvisibility=hidden",
+    "-shared",
+    "-Wl,-z,max-page-size=16384",
+    "-DCR_EXPERIMENTAL_PRODUCER_ORIGINS=0"
+  ],
+  "note": "Hooks through the MuMu translator in-place entry stubs. Also relaxes the remaining strict entry guards (attack edges, deployment timing, causal deployment, spawn relations) through the shared entry_matches() predicate. The attack dispatch wrapper is skipped when its entry carries a stub, because it replays instructions stolen from the entry. Verified live: every hook group installs, a battle binds, and attack phase / attack event telemetry is populated again.",
+  "source_files": [
+    {
+      "path": "ability_runtime.inc",
+      "sha256": "51a62cc749fab2d70f27ddcbe921f63e0963cad0f2038b9f264a38d8599f95f0"
+    },
+    {
+      "path": "active_effects.inc",
+      "sha256": "21a1a1aed8511f5ab17fb638a616014a5a7279eee037150eddfaedfb172bface"
+    },
+    {
+      "path": "area_origin.inc",
+      "sha256": "4cf3cb3f022cb1ed0e6d366e4c784ab327ac39688f567d9529abd4d0c7011915"
+    },
+    {
+      "path": "attack_edges.inc",
+      "sha256": "8474faeed9f15e095d1393c67d575975fd421fb5f8f03c8b58cf0ae17e7ea8f2"
+    },
+    {
+      "path": "attack_history.h",
+      "sha256": "d4ec3d3578874a2b49fe4e8afc95f29b764a84bfbde062e09b1a42db49680c6d"
+    },
+    {
+      "path": "attack_start_arm64.S",
+      "sha256": "2570529db8602fb372708f7103deeffe54b543c06ad7eaa907701d56af65d091"
+    },
+    {
+      "path": "build_probe.ps1",
+      "sha256": "191bf29d0f080d9853ceced79953c93c0a6a3722d6fb576b22fa35882b499e7a"
+    },
+    {
+      "path": "card_runtime.inc",
+      "sha256": "853e5ae430ece11c8d23ac14a9d13a3e260de2507f0a657c4153c7646fc74124"
+    },
+    {
+      "path": "card_selection_arm64.S",
+      "sha256": "87d2e83af59e960169084ff0de4d728c468954e7952a331c3d53259f9e223eaa"
+    },
+    {
+      "path": "causal_deployment.inc",
+      "sha256": "6201dad4fbc06addf0fe9ee8b53b026731dc8b1a3e83a38ce8ea62052de583f5"
+    },
+    {
+      "path": "damage_events.inc",
+      "sha256": "6a2b280eaa3c327dfd16f3f75a4aca2848b2f92dbafc0bd4ca25351995b19a9e"
+    },
+    {
+      "path": "deployment_timing.inc",
+      "sha256": "e92695e56d206925f6394939ea327a2cf879e03d689d399a18f4d0782629ec25"
+    },
+    {
+      "path": "effect_origin.inc",
+      "sha256": "32f2325c6f2c82403f9b9fa4f23abfe24a5fda7e00d42fed8bc1dcb2ac4d5fdc"
+    },
+    {
+      "path": "heal_events.inc",
+      "sha256": "7059efeb325b473f3d4971c6f7a02a29c9b65719f30a0436bb4a89d2c8177479"
+    },
+    {
+      "path": "heal_events_arm64.S",
+      "sha256": "047463bc5f3c3a144d9c610b037a418e52c3338664814ef02859ea2d4b5f0d27"
+    },
+    {
+      "path": "impact_events.inc",
+      "sha256": "261d17678ef6db4e430e1cb24a62d3f32d4562de5ffadbe947ead6a85afbac41"
+    },
+    {
+      "path": "nulls_probe.cpp",
+      "sha256": "397f123364dbc96fb860b871fbc028a96dc3b5888a2e472ce7d3d73f09d01f24"
+    },
+    {
+      "path": "phase_runtime_layout.h",
+      "sha256": "d17027dcdfe7f9a8435db4ebf111f6ec194c6085d3ce17d0c4af1f17ecff63a0"
+    },
+    {
+      "path": "probe_artifacts.ps1",
+      "sha256": "c290003593c45dd803677d15f7ff0268d0bf6f9946e43cec0622317d234cce44"
+    },
+    {
+      "path": "probe_features.h",
+      "sha256": "5ba7f5d4e4d7df55325278358a72fb20ffe49eb6c7c19bd14fb93f7b44882ad6"
+    },
+    {
+      "path": "projectile_origin.inc",
+      "sha256": "403e610cff36b3c1e5f1cdfb921b3cd717887085830a5f50083e67685368b054"
+    },
+    {
+      "path": "projectile_runtime.inc",
+      "sha256": "581e1b924ee00a23f68690898d57a160e7f816ad8020454c8dc05beba57ae1ed"
+    },
+    {
+      "path": "runtime_snapshot.inc",
+      "sha256": "cbafbf206cd0c525a3fd75675cfdf90f21f80b98139e035dd3387ed1b85b758a"
+    },
+    {
+      "path": "spawn_relations.inc",
+      "sha256": "51e78efa6eb0a406b22c383330b58ed69ecb522ff276a51c10929ae20dec1ab8"
+    },
+    {
+      "path": "spawn_relations_arm64.S",
+      "sha256": "ca2507127a5f1e970d42f0cfb670207cdfdf234a6442c2a99767181f1343ac0a"
+    }
+  ]
+}

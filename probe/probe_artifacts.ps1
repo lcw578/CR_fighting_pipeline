@@ -1,6 +1,6 @@
 # Shared artifact resolution. No ADB operations or filesystem mutations here.
 $script:ProbeArtifactRoot = $PSScriptRoot
-$script:StableProbeSha256 = '9d1c8d79712c7116e27c324dd9bcbd85d6be07923e7c8b989c61bee57cd095b0'
+$script:StableProbeSha256 = 'a63b1826b87cd390b08a0fc69884830b16f3fcbad4cc88dcb01edf964a18530c'
 
 function Get-ProbeSourceHashes {
     Get-ChildItem -LiteralPath $script:ProbeArtifactRoot -File |

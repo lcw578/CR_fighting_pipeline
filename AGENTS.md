@@ -14,6 +14,8 @@
 - 手动安装步骤：[docs/SETUP.md](docs/SETUP.md)。
 - 选择模型或说明权重来历：[docs/MODELS.md](docs/MODELS.md)。
 - 多局自动化（含天梯"再来一场"直连下一局）：`tools/multi_match.py --help`。
+- 无人值守长跑（分块会话、日志轮转、哨兵停止、空局退避）：`tools/forever.py --help`。
+- 触碰探针（钩子失效、重新编译、提升产物）：先读 [docs/PROBE.md](docs/PROBE.md)。
 - 改动表情开关、间隔或托盘坐标：先看 [docs/EMOTE.md](docs/EMOTE.md)；
   坐标核对步骤在 [docs/CALIBRATION.md](docs/CALIBRATION.md) 的“表情面板”。
 - 修改观测或执行逻辑：先看 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
@@ -30,6 +32,14 @@
 优先复用 `setup.ps1`、`tools/preflight.py`、`probe/deploy_probe.ps1`、
 `tools/inspect_players.py`、`tools/multi_match.py` 和 `start_agent.bat`。
 配置变化需重新启动进程才能生效。同一实例一次只运行一个负责触摸的 AI 进程。
+
+模拟器更新会还原游戏目录里的 `libscid_sdk.so`（探针消失），并可能让新版 ARM 转译器
+改写函数入口，导致探针钩子安装失败而**表面仍能响应端口**。症状、诊断与修法见
+[docs/PROBE.md](docs/PROBE.md)。
+
+**修改探针时的硬性不变量**：任何针对函数入口的校验都必须走 `entry_matches()`。
+探针里除中央的 `install_inline_hook` 外还有若干 `.inc` 自己写的入口守卫，
+漏掉任何一处就会让整组钩子静默失效。改动前先全仓库搜索 `memcmp` 入口模式。
 
 遵循用户当前任务范围及已有授权。已授权的安装、重启或自动测试可以继续；
 缺少无法读取的关键信息或需要未授权操作时再询问，不要求用户逐步重复确认。

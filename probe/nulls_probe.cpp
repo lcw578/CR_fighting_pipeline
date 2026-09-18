@@ -110,10 +110,51 @@ bool make_page_writable(void *address, int protection) {
     return mprotect(reinterpret_cast<void *>(page), static_cast<size_t>(page_size), protection) == 0;
 }
 
+// The MuMu ARM translator rewrites the entry of a function it has translated
+// into an absolute-jump stub of its own:
+//
+//     ldr x17, #8          ; 0x58000051
+//     br  x17              ; 0xd61f0220
+//     .quad translated_code
+//
+// A hot function therefore no longer carries its original prologue by the time
+// the probe installs hooks, and a strict prologue check refuses to hook exactly
+// the functions that matter -- notably GameStateManager::step and
+// BattleController::fullUpdate, the only writers of g_in_battle. Measured on the
+// updated emulator: every entry carrying this stub is one the translator has
+// already translated, and the translator does not rewrite such an entry again,
+// so hooking on top of it is stable.
+//
+// Copying the stub verbatim into the trampoline keeps the chain intact: the
+// copied stub branches to the translated code by itself, so the jump appended at
+// trampoline + prologue_len is never reached in this case. The hook handler keeps
+// calling *out_original exactly as it does for an unhooked entry.
+constexpr uint32_t kTranslatorStubWord0 = 0x58000051u;  // ldr x17, #8
+constexpr uint32_t kTranslatorStubWord1 = 0xd61f0220u;  // br x17
+
+bool entry_is_translator_stub(const uint8_t *target, size_t prologue_len) {
+    if (prologue_len != 16) return false;
+    uint32_t words[2];
+    std::memcpy(words, target, sizeof(words));
+    return words[0] == kTranslatorStubWord0 && words[1] == kTranslatorStubWord1;
+}
+
+// Shared entry predicate for every hook site. Sites that verify an entry before
+// hooking must accept the translator stub too, otherwise they keep refusing to
+// hook exactly the functions the translator has already translated -- which is
+// the state every hot function is in once the game is running.
+bool entry_matches(const uint8_t *target, const uint8_t *expected, size_t prologue_len) {
+    return entry_is_translator_stub(target, prologue_len) ||
+           std::memcmp(target, expected, prologue_len) == 0;
+}
+
 bool install_inline_hook(uintptr_t target_addr, const uint8_t *expected_prologue, size_t prologue_len,
                          const void *hook_fn, void **out_original, const char *name) {
     uint8_t *target = reinterpret_cast<uint8_t *>(target_addr);
-    if (std::memcmp(target, expected_prologue, prologue_len) != 0) {
+    const bool through_stub = entry_is_translator_stub(target, prologue_len);
+    if (through_stub) {
+        LOGI("%s entry carries a translator stub at %p; hooking through it", name, target);
+    } else if (std::memcmp(target, expected_prologue, prologue_len) != 0) {
         LOGE("Prologue mismatch for %s at %p", name, target);
         return false;
     }

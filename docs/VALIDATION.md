@@ -6,8 +6,9 @@
 ## 发布整理之前的基线（2026-09-13）
 
 - 213 项 Python 测试通过。
-- 稳定探针重编译与此前实机验证二进制逐字节一致；稳定 SHA-256 为
-  `9d1c8d79712c7116e27c324dd9bcbd85d6be07923e7c8b989c61bee57cd095b0`。
+- 稳定探针重编译与此前实机验证二进制逐字节一致；当时的稳定 SHA-256 为
+  `9d1c8d79712c7116e27c324dd9bcbd85d6be07923e7c8b989c61bee57cd095b0`（该产物已于
+  2026-09-18 因模拟器更新被替换，见下文）。
 - 真实治疗对局回放：速猪和 General、reference 和 extended，各 664 次推理，共 2656 次，无推理错误。
 - 相同回放两方案动作不同不代表胜率提升，动作不会反过来改变记录中的对局。
 - 旧战斗回放各 679 次张量化通过；军团回放 599 次张量化，四组各 15 个成员、同时存活与阵亡减员保留。
@@ -100,7 +101,94 @@
 此外核对文档里引用的 54 个脚本路径全部存在，10 个被文档化的命令行参数在当前 `--help` 中有效。
 依赖方面确认 `setup.ps1` 固定的 `torch==2.11.0` 在 CUDA 12.8 索引中确实存在（`2.11.0+cu128`）；
 `requirements.txt` 的各项在本机因代理故障无法向 PyPI 解析，**本次未能验证**。
-随包保留的上游 `native_runner/tests/`（52 个文件）依赖未安装的 pytest，本项目不运行它们。
+上游自带的 `native_runner/tests/` 已随本次裁剪移除（它依赖未安装的 pytest，本项目从不运行它）；
+本项目的回归测试全部在 `tests/` 下，用标准库 `unittest` 运行。
 
 **本次仍未覆盖**：设备连接、探针安装与恢复、GPU 推理、真实对局中的下牌与执行确认。
 所以"新用户能跑通完整流程"目前只对离线部分成立，实机部分必须在有可用实例的机器上验证。
+
+## 模拟器更新后的探针适配与实机验证（2026-09-18）
+
+本次在同一台电脑的 Root MuMu 实例（MuMu 12 6.6.4.0，更新替换了 `system.vdi`）上完成，
+推理设备为 CUDA（RTX 4070 Laptop），torch `2.11.0+cu128`。
+
+**现象**：更新后探针的 TCP 服务正常，但两个关键钩子安装失败：
+
+```
+E NullsProbe: Prologue mismatch for GameStateManager::step at 0x830e0a4
+E NullsProbe: Prologue mismatch for BattleController::fullUpdate at 0x7f34bbc
+```
+
+这两个钩子是 `g_in_battle` 的唯一写入点，所以探针永远返回 `{"in_battle":false}`，
+AI 一直 `waiting: idle`，联机对局无法接管。
+
+**根因**：更新后的 MuMu ARM 转译器会在**已翻译的热函数入口就地写入自己的绝对跳转桩**：
+
+```
+ldr x17, #8  ; 0x58000051
+br  x17      ; 0xd61f0220
+.quad translated_code
+```
+
+排查依据：设备 `libg.so` 哈希仍等于支持指纹，且**文件**在该偏移处正是探针期望的原始序言，
+但**运行时内存**已是上述桩；桩的跳转目标每个进程都不同。因此失配来自运行时改写，
+与偏移常量、基址（与 `/proc/maps` 首行一致）、页大小（4096）均无关。
+
+**适配**：`install_inline_hook` 现在把转译器桩视为合法入口状态 —— 复制这 16 字节进 trampoline
+后，桩自身会跳到转译代码，续跳链路保持不变。所有会预先校验入口的钩子站点
+（`deployment_timing.inc`、`causal_deployment.inc`、`spawn_relations.inc`）改用同一个
+`entry_matches()` 判定，避免它们继续拒绝热函数。
+
+**实机验证**（当轮稳定探针 `7cc0df2012ea5eb2cd98c26f3d9b79caa867e39e70a0b18759def66e58a98013`，
+已被下述第二轮取代）：
+
+| 检查 | 结果 |
+| --- | --- |
+| `tools/preflight.py --model active_il` | 9 项全 PASS，0 failure |
+| 钩子安装 | `GameStateManager::step`、`BattleController::fullUpdate` 以及 consume / spawn / impact / damage / heal 全部经转译器桩安装成功 |
+| 探针绑定对局 | 点击「对战」后约 4.5 秒返回 `in_battle:true`、`tick` 推进、`entities` 6 座塔，含圣水与手牌 |
+| 整局只观察（`--dry-run --once --start-battle --emote`） | `battle_start`（tick 2，读到 8 张卡组与双方塔资产）→ 模型预热 → 每 5 tick 决策 → 动作解码含格点/屏幕/世界坐标 → 终局 `crowns [0,3]` 正确识别 → 干净退出 |
+| 表情调度 | `dry_run_emote` 按 3.5–5 秒间隔触发，空闲窗口外自动顺延 |
+
+**本次仍未覆盖**：真实下牌与执行确认（本次为只观察）、`tools/forever.py` 的整夜长跑。
+自动对战的端到端仍以更新前 2026-09-18 凌晨的 5 局实机记录为准。
+
+### 第二轮：补齐 attack_edges，恢复攻击相位遥测（2026-09-18）
+
+第一轮只修了 `install_inline_hook` 的中央判定，**漏掉了 `probe/attack_edges.inc` 里自己的入口守卫**：
+
+```c
+for (int i=0;i<5;++i) if (memcmp(libg_base+offsets[i],bytes[i],16)) return false;
+```
+
+这 5 个入口与 `libg.so` 文件逐字节一致，但运行时**全部**被转译器写成跳转桩，因此该组整体放弃
+（`install_attack_edges -> 0`），并因 `g_effect_origin_ready = g_attack_hooks_ready && …` 的短路
+连带跳过了 `effect_origin`。
+
+把更新前 6 局日志与第一轮后的一局逐项对比，确认这是**真实退化**（不是装饰）：
+
+| 观测项 | 更新前 6 局峰值 | 第一轮后 | 本轮修复后 |
+| --- | --- | --- | --- |
+| `attack_phase_known_count` | 7–17 | 0 | **6** |
+| `attack_event_count` | 10–17 | 0 | **3** |
+| `effect_runtime_known_count` | — | （被短路跳过） | **13** |
+
+`attack_phase` 不是装饰项：`training/v4/config.py` 的特征表含 `attack_phase_remaining_over_5000ms`，
+而 `bridge/runtime_state.py` 用探针的 `edges` 数组推导该相位。缺了它，模型输入即落在训练分布之外。
+
+**修法**：该组 4 个标准钩子改用共享的 `entry_matches()`；`kActionDispatchOffset` 是手写钩子
+（把入口 `+4` 起 12 字节拷进 trampoline、跳到 `+16`，靠 `if (action) g_dispatch(...)` 复现原始
+`CBZ x2` 分支），入口为桩时那 12 字节是桩的中段，语义不成立，因此**该单个钩子跳过**并记一条
+`attack dispatch entry holds a translator stub … skipped`。
+
+**实机验证**（稳定探针 `a63b1826b87cd390b08a0fc69884830b16f3fcbad4cc88dcb01edf964a18530c`）：
+
+- 9 个钩子组全部安装（`install_attack_edges`、`install_effect_origin_observers`、
+  `Attack edge hooks ready` 均由 0 变为 1）
+- 一局真实自动对战（`--checkpoint active_il --emote --once --start-battle`）：
+  857 次决策、`action_queued` 26 → `hand_ack` 25 → `spawn_observed` 25、
+  表情 45 次、觉醒形态 3 次、终局 `crowns [0,1]` `result=win`
+- `attack_phase_known_count`、`attack_event_count` 回到非零
+
+注：本局实体峰值为 7，战斗规模小于此前 6 局（实体 12–37），所以这两项的绝对值低于当时区间，
+属战斗规模差异，不是仍缺数据。

@@ -221,11 +221,11 @@ bool install_spawn_observers() {
     const uint8_t buff[]={0xff,0x03,0x03,0xd1,0xfd,0x7b,0x08,0xa9,0xf8,0x5f,0x09,0xa9,0xf6,0x57,0x0a,0xa9};
     const uint32_t spawn_call=0x97ffe21c; // f20aa4 -> f19314
     uint32_t actual_call=0;
-    if (!g_deployment_hooks_ready || memcmp(reinterpret_cast<void*>(g_libg_base+0xe7b864),action,16) ||
-        memcmp(reinterpret_cast<void*>(g_libg_base+0xf25928),pending,16) ||
-        memcmp(reinterpret_cast<void*>(g_libg_base+0xf25914),tagged,16) ||
-        memcmp(reinterpret_cast<void*>(g_libg_base+0xf2ffb8),mode1,16) ||
-        memcmp(reinterpret_cast<void*>(g_libg_base+0xf208dc),buff,16) ||
+    if (!g_deployment_hooks_ready || !entry_matches(reinterpret_cast<const uint8_t*>(g_libg_base+0xe7b864),action,16) ||
+        !entry_matches(reinterpret_cast<const uint8_t*>(g_libg_base+0xf25928),pending,16) ||
+        !entry_matches(reinterpret_cast<const uint8_t*>(g_libg_base+0xf25914),tagged,16) ||
+        !entry_matches(reinterpret_cast<const uint8_t*>(g_libg_base+0xf2ffb8),mode1,16) ||
+        !entry_matches(reinterpret_cast<const uint8_t*>(g_libg_base+0xf208dc),buff,16) ||
         !safe_bytes(reinterpret_cast<void*>(g_libg_base+0xf20aa4),&actual_call,4) || actual_call!=spawn_call) return false;
     g_spawn_relation_observer=summon_registered;
     return install_inline_hook(g_libg_base+0xe7b864,action,16,reinterpret_cast<void*>(summon_action),

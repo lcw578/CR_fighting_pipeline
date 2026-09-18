@@ -154,14 +154,19 @@ NDK 只在你打算重新编译探针时才需要。
 设备内遥测端口固定为 26888，主机端口可以不同，不要把两者一起随意修改。
 独立的地面校准可放到 `local/` 下，保持公开参考文件不带本机确认信息。
 
-双击 `start_agent.bat` 后，菜单提供四组选项，直接回车采用当前默认：
+双击 `start_agent.bat` 后，菜单提供四到五步选项，直接回车采用当前默认：
 
 | 菜单 | 可选内容 |
 | --- | --- |
-| 运行方式 | 自动对战并等待再次匹配／自动对战只运行一局／只观察和记录（不下牌、不点技能）／只观察一局 |
+| 运行方式 | 自动对战并等待再次匹配／自动对战只运行一局／只观察和记录（不下牌、不点技能）／只观察一局／**多局自动对战**／**多局演练（不连接 ADB）** |
 | 模型 | 速猪 specialist2（默认）、速猪 specialist1（对照）、通用模型 general、IL、active IL，见[模型与权重](MODELS.md) |
-| 特殊形态 | 自动识别英雄火枪手与觉醒小骷髅／加农炮；或禁用特殊形态执行用于排错 |
-| 输入方案 | `reference` 原版规则基线（默认）；或 `extended` 精确事件对照实验 |
+| 特殊形态 | 仅单局入口询问；自动识别英雄火枪手与觉醒小骷髅／加农炮，或禁用特殊形态执行用于排错 |
+| 输入方案 | 仅单局入口询问；`reference` 原版规则基线（默认），或 `extended` 精确事件对照实验 |
+| 发表情 | 默认关闭；选 2 则按设置文件里的间隔发送，见[自动表情](EMOTE.md) |
+| 连续局数 | 仅多局入口询问，默认 10 |
+
+选多局入口时只问「运行方式 → 模型 → 连续局数 → 发表情」，不会带上单局入口专有的参数；
+无人值守的长跑请改用下面的 `tools/forever.py`。
 
 **切换模型不会扩大执行支持范围。** 权重决定策略偏好，可执行的卡牌形态、英雄技能与塔兵状态
 由桥接层决定。英雄火枪手未校准技能按钮时，技能点击会禁用。
@@ -172,18 +177,27 @@ NDK 只在你打算重新编译探针时才需要。
 # 只观察一局：推理并记录，不下牌
 .\.venv\Scripts\python.exe main.py --checkpoint hog26 --dry-run --once
 
-# 使用通用模型自动执行一局；等待 ready 后手动匹配
-.\.venv\Scripts\python.exe main.py --checkpoint general --once
+# 使用通用模型自动执行一局，并自动发表情；等待 ready 后手动匹配
+.\.venv\Scripts\python.exe main.py --checkpoint general --once --emote
 
 # 连续多局：天梯结算页用"再来一场"直接衔接下一局
 .\.venv\Scripts\python.exe tools\multi_match.py --matches 50 --checkpoint hog26 --rematch
+
+# 无人值守长跑：每会话 10 局、表情默认开启、日志轮转、哨兵停止
+.\.venv\Scripts\python.exe tools\forever.py --checkpoint hog26
+
+# 演练：只打印解析后的计划，不启动任何会话
+.\.venv\Scripts\python.exe tools\forever.py --dry-run
+
+# 表情校准：盯着 AI 的 JSONL，每次 emote_sent 抓一帧
+.\.venv\Scripts\python.exe tools\capture_emotes.py --log runs\emote.jsonl --output diagnostics\emotes
 
 # 在已有本地采集记录上比较两套输入，不操作游戏
 .\.venv\Scripts\python.exe tools\compare_observation_profiles.py --help
 ```
 
 `main.py` 常用参数：`--checkpoint`、`--device`、`--account-id`、`--dry-run`、`--once`、
-`--observation-profile`、`--sample`、`--base-only`、`--start-battle`、`--log`。
+`--observation-profile`、`--sample`、`--base-only`、`--start-battle`、`--emote`、`--log`。
 完整列表见 `main.py --help`。
 
 只观察模式仍会建立 ADB 连接、端口转发并读取屏幕尺寸，但不下牌或点击技能。
@@ -197,7 +211,8 @@ NDK 只在你打算重新编译探针时才需要。
 而是把 `validated && finalized` 当作"可能是结算页"，每轮对每个已知的确定位置各点一次。
 解围轮次与各阶段超时可用 `--result-rounds`、`--battle-timeout`、`--matchmaking-timeout` 等参数调整；
 失败的一轮不会自行重试：任一轮失败即终止整个会话并返回退出码 2，
-需要连续多局时要由外层脚本决定是否重新启动。
+需要连续多局时要由外层脚本决定是否重新启动——`tools/forever.py` 就是那个外层脚本，
+它让 `multi_match.py` 保持"唯一驱动游戏"的地位，自己只负责起会话、轮转日志和响应停止文件。
 
 **分辨率约束**：大厅、结算页与"再来一场"的点击位置是固定的 1080×1920 像素
 （`config.py` 的 `LOBBY_*` 与 `tools/multi_match.py` 的 `RESULT_OK_POSITIONS`、`REMATCH_BUTTON`），
@@ -216,7 +231,9 @@ NDK 只在你打算重新编译探针时才需要。
 | `tools/capture_native.py` | 采集原生遥测（含卡牌预览画面）为 JSONL；不推理、不输入 |
 | `tools/compare_observation_profiles.py` | 在已记录对局上反事实比较两套输入；不接触游戏，也不是胜率评测 |
 | `tools/audit_relations.py` | 核对 V4 关系张量与实测对象；离线运行，不发输入 |
-| `tools/multi_match.py` | 多局自动化监督器 |
+| `tools/multi_match.py` | 多局自动化监督器（**有界**：`--matches` 显式给局数，无无限重试） |
+| `tools/forever.py` | 无人值守长跑：在有界监督器之上反复起会话，带日志轮转、哨兵停止与空局退避 |
+| `tools/capture_emotes.py` | 表情校准：按 `emote_sent` 逐条抓帧，汇总出现过的槽位索引 |
 | `tools/package_release.py` | 打包已审查文件；不含运行产物、权重与上游 |
 | `tools/launch_menu.py` | 启动菜单，由 `start_agent.bat` 调用 |
 | `test_pipeline.py` | 离线回归套件入口；`--model` 追加真实权重推理，不碰 ADB |
@@ -256,6 +273,22 @@ powershell -ExecutionPolicy Bypass -File .\probe\deploy_probe.ps1 -Restore
 不会重发已经提交的指令。若恢复后已进入另一局，该模式会退出。在上一局的结果页启动 AI 时，
 会等待新的对战开始。
 
+**模拟器更新后一直等待，探针像是活着但读不到对局？**
+
+这是已知症状，不是配置错误。更新 MuMu 会还原游戏目录里的探针，
+并可能让新版 ARM 转译器改写热函数入口，使探针的钩子安装失败——
+此时端口仍能响应 `PING`/`GET`，但永远返回 `{"in_battle":false}`。
+
+先按 [探针](PROBE.md) 的诊断步骤看 `logcat | grep NullsProbe` 是否有
+`Prologue mismatch`，再按同一篇的修法重新编译与部署。重装探针或重启游戏都无效。
+
+**刚打完一局，探针还报 `in_battle: true`？**
+
+这是设计如此：`g_in_battle` 只置真不复位，对局结束后探针会继续返回上一局的冻结终局快照，
+所以"真实大厅"与"仍停在结算页"在探针层面不可区分。判断终局请看
+`battle_result.validated && finalized`，绑定新局靠 tick 是否推进，
+不要等待"空闲探针"。详见[探针](PROBE.md)。
+
 **第一次启动就报 `ValueError` 怎么办？**
 
 自动对战启动前会检查两项前置条件，缺任何一项都会以 `ValueError` 终止并打印堆栈。
@@ -294,6 +327,10 @@ powershell -ExecutionPolicy Bypass -File .\probe\test_artifacts.ps1
 套件会因为缺 torch 而以一条与真实原因无关的导入错误终止
 （`'test_pipeline' module incorrectly imported`）——这是仓库根的 `test_pipeline.py`
 与 `tests/test_pipeline.py` 同名导致的报错，改用 `.venv` 的解释器重跑即可。
+
+改动探针（钩子、偏移、编译参数）属于另一类工作：它既要跑上面的离线检查，
+也必须实机确认钩子被真正调用。步骤、诊断方法与必须遵守的入口校验不变量见
+[探针](PROBE.md)。只看到"钩子安装成功"不算通过——钩子装上却从不被调用是可能的。
 
 `probe/test_artifacts.ps1` 是离线回归检查，只用伪造产物验证安装器必须拒绝的情形，
 不调用 ADB、不部署、不启动游戏。

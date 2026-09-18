@@ -187,8 +187,8 @@ void append_deployment_diagnostics(char *json,int &offset,size_t size) {
 bool install_deployment_observers() {
     const uint8_t consume[]={0xff,0x83,0x03,0xd1,0xfd,0x7b,0x08,0xa9,0xfc,0x6f,0x09,0xa9,0xfa,0x67,0x0a,0xa9};
     const uint8_t spawn[]={0xfd,0x7b,0xbc,0xa9,0xf7,0x0b,0x00,0xf9,0xf6,0x57,0x02,0xa9,0xf4,0x4f,0x03,0xa9};
-    if (memcmp(reinterpret_cast<void*>(g_libg_base+0xf38a68),consume,16) ||
-        memcmp(reinterpret_cast<void*>(g_libg_base+0xf25b8c),spawn,16)) return false;
+    if (!entry_matches(reinterpret_cast<const uint8_t*>(g_libg_base+0xf38a68),consume,16) ||
+        !entry_matches(reinterpret_cast<const uint8_t*>(g_libg_base+0xf25b8c),spawn,16)) return false;
     return install_inline_hook(g_libg_base+0xf38a68,consume,16,reinterpret_cast<void*>(deployment_consume),
         reinterpret_cast<void**>(&g_deployment_consume_original),"causal consume") &&
         install_inline_hook(g_libg_base+0xf25b8c,spawn,16,reinterpret_cast<void*>(deployment_spawn),

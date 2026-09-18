@@ -5,5 +5,10 @@
   "account_id": null,
   "device": "cuda:0",
   "probe_port": 26888,
-  "calibration_verified": false
+  "calibration_verified": false,
+  "emote_tray_open_seconds": 0.12,
+  "emote_first_delay_seconds": 15.0,
+  "emote_min_interval_seconds": 3.5,
+  "emote_max_interval_seconds": 5.0,
+  "emote_ability_hud_margin": 24.0
 }

@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import config
 
 GAME_SHA = '110aa2b5cac391c498645e072b0d88729428c2c2845e7e2737ca8ee979059783'
-PROBE_SHA = '9d1c8d79712c7116e27c324dd9bcbd85d6be07923e7c8b989c61bee57cd095b0'
+PROBE_SHA = 'a63b1826b87cd390b08a0fc69884830b16f3fcbad4cc88dcb01edf964a18530c'
 PROBE = config.BASE_DIR / 'probe/artifacts/stable/libscid_sdk.so'
 
 

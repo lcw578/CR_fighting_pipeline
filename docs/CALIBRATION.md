@@ -48,9 +48,18 @@
 1. **`emote_button`**：对局内 HUD 左下角的对话框按钮，位于手牌行左侧、`下一张：` 标签上方。
    参考值 `(106, 1640)`，在 1080×1920 的大头锤卡组对局截图上有叠图确认。
 2. **`emote_slots`**：点开托盘后各个表情的中心。参考文件给的是两行三列。
-   核对方法：把 `emote_first_delay_seconds` 设为 0、`emote_min/max_interval_seconds` 设为 3.5/4.0
-   跑一局，同时在每次 `emote_sent` 后用 `adb exec-out screencap -p` 抓一帧——
-   表情气泡会在我方国王塔旁停留两三秒，逐帧对照即可确认每个槽位。
+   核对方法：把 `emote_first_delay_seconds` 设为 0、`emote_min/max_interval_seconds` 设为 3.5/4.0，
+   开一局带 `--emote` 的对局并记录 JSONL，然后让 `tools/capture_emotes.py` 盯着那份日志抓帧：
+
+   ```powershell
+   .\.venv\Scripts\python.exe main.py --checkpoint hog26 --once --start-battle --emote --log runs\emote.jsonl
+   .\.venv\Scripts\python.exe tools\capture_emotes.py --log runs\emote.jsonl --output diagnostics\emotes
+   ```
+
+   每来一条 `emote_sent`，工具就立刻抓一帧并按 `slot<索引>_tick<tick>.png` 命名——
+   表情气泡会在我方国王塔旁停留两三秒，所以发出去之后 1 秒内抓的帧都落在气泡上。
+   逐帧对照即可确认每个槽位；结尾会汇总出现过的槽位索引，没出现过的槽位就是还没核对。
+   工具从设置文件读 ADB 路径与序列号，不需要另填本机常量。
 
 **不要照搬上游参考里的第四列（x=869）**：它距离 `ABILITY_HUD_BOUNDS` 左边界只有 6 像素，
 误触会消耗 3 圣水。本仓库不采用该列，且 `Actuator.emote` 会用 24 像素余量拒绝过近的槽位。

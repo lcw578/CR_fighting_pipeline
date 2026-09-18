@@ -12,36 +12,72 @@
 | `bridge/hero_execution.py` | `covered_by_ability_hud(..., margin=)`：技能按钮 HUD 保护（含余量） |
 | `config.py` | `EMOTE_*` 常量 |
 | `main.py` | `--emote` 参数、循环内的挂载点、失效软着陆 |
+| `tools/multi_match.py` | 有界多局；把 `--emote` 透传给每局的子进程 |
+| `tools/forever.py` | 无人值守长跑；表情默认开启，可用 `--no-emote` 关闭 |
+| `tools/launch_menu.py` | 启动菜单里的「发表情」与多局运行方式 |
+| `tools/capture_emotes.py` | 校准：按 `emote_sent` 逐条抓帧 |
 
 ## 开启方式
 
 ```
 python main.py --once --start-battle --emote
 python tools/multi_match.py --matches 5 --emote
+python tools/forever.py --checkpoint hog26          # 无人值守长跑，表情默认开启
 ```
 
 `--emote` 是唯一的开关，没有对应的隐藏默认值；不加这个参数时行为与之前完全一致。
+启动菜单（`start_agent.bat`）第五步也有「发表情」选项，多局模式在运行方式里选 5 或 6。
 
 可调参数写入 `settings.local.json`（都会经过范围校验，非法值在导入 `config` 时即报错）：
 
-| 键 | 默认 | 含义 |
-| --- | --- | --- |
-| `emote_min_interval_seconds` | 20.0 | 两次表情的最小间隔 |
-| `emote_max_interval_seconds` | 35.0 | 最大间隔；每次在该区间内随机取值 |
-| `emote_first_delay_seconds` | 15.0 | 本局第一次表情之前的等待时间 |
-| `emote_tray_open_seconds` | 0.12 | 点开托盘到点槽位之间的等待 |
-| `emote_ability_hud_margin` | 24.0 | 技能按钮保护区的额外余量（参考像素） |
-| `emote_calibration_path` | `emote_calibration.local.json` | 坐标文件路径 |
+| 键 | 模板值 | 代码兜底 | 含义 |
+| --- | --- | --- | --- |
+| `emote_min_interval_seconds` | 3.5 | 20.0 | 两次表情的最小间隔 |
+| `emote_max_interval_seconds` | 5.0 | 35.0 | 最大间隔；每次在该区间内随机取值 |
+| `emote_first_delay_seconds` | 15.0 | 15.0 | 本局第一次表情之前的等待时间 |
+| `emote_tray_open_seconds` | 0.12 | 0.12 | 点开托盘到点槽位之间的等待 |
+| `emote_ability_hud_margin` | 24.0 | 24.0 | 技能按钮保护区的额外余量（参考像素） |
+| `emote_calibration_path` | `emote_calibration.local.json` | 同左 | 坐标文件路径 |
+
+`settings.example.json` 随仓库分发的是 **3.5–5 秒**这一组：它是实测的甜点区间，
+所以复制模板后不做任何改动就是长跑节奏。上面的「代码兜底」是这些键缺失时的回退值，
+只有在你删掉对应键、或用一份不含表情参数的自定义设置文件时才会命中。
 
 **间隔是下限而不是精确值**：表情只在执行器空闲时才发，所以实际间隔可能被推迟。
 实测把间隔设为 2.5–3.5 秒时，实际中位数是 3.29 秒、最大 4.30 秒。
 
+## 无人值守长跑
+
+长时间挂机用 `tools/forever.py`：它在有界的 `tools/multi_match.py` 之上反复起会话，
+让「唯一驱动游戏」的仍然是有界工具，同时补上三件长跑必须的事——
+
+| 守卫 | 行为 | 相关参数 |
+| --- | --- | --- |
+| 日志轮转 | 一局写 70–260 MB JSONL；只保留最新 N 份每局日志 | `--keep-logs`（默认 40） |
+| 哨兵停止 | 创建停止文件后几秒内结束，包括会话进行中 | `--stop-file`（默认 `local/STOP_FOREVER`） |
+| 空局退避 | 连续多个会话一局都没打完就停止，不无限重试坏掉的模拟器 | `--max-bad-sessions`、`--retry-backoff` |
+
+```powershell
+# 默认：每会话 10 局、表情开启、保留 40 份日志
+.\.venv\Scripts\python.exe tools\forever.py
+
+# 换模型、换节奏、换输出目录
+.\.venv\Scripts\python.exe tools\forever.py --checkpoint active_il --matches-per-session 5 --keep-logs 20
+
+# 演练：只打印解析后的计划，不启动任何会话
+.\.venv\Scripts\python.exe tools\forever.py --dry-run
+```
+
+停止：`type nul > local\STOP_FOREVER`，或 Ctrl+C。不要发第二个 AI 进程。
+
 ## 校准文件
 
 复制 `emote_calibration.example.json` 为 `emote_calibration.local.json`
-（后者已被 `.gitignore` 覆盖，不要把自己的 verified 文件打包给别人）。核对步骤见
-[docs/CALIBRATION.md](CALIBRATION.md#表情面板)。`verified` 不为 `true` 时表情会被禁用，
-但**只记一条 `emote_input_disabled` 日志，不影响对局继续运行**。
+（后者已被 `.gitignore` 覆盖，不要把自己的 verified 文件打包给别人）。
+逐槽位核对的完整步骤见 [docs/CALIBRATION.md](CALIBRATION.md#表情面板)；
+其中「每次 `emote_sent` 抓一帧」由 `tools/capture_emotes.py` 自动完成，结尾会汇总出现过的槽位索引。
+
+`verified` 不为 `true` 时表情会被禁用，但**只记一条 `emote_input_disabled` 日志，不影响对局继续运行**。
 
 `emote_slots` 的数量可以是任意个，调度器按索引随机选取。
 
